@@ -7,6 +7,7 @@
 
 #include <pcapplusplus/IPv4Layer.h>
 #include <pcapplusplus/VlanLayer.h>
+#include <pcapplusplus/TcpLayer.h>
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/PcapFileDevice.h>
 
@@ -29,6 +30,16 @@ struct VlanRecord {
   VlanRecord(int id): id(id) {}
   FlowKey hash() const {
     return id;
+  }
+};
+
+struct TcpRecord {
+  unsigned src, dst;
+  std::size_t count = 0;
+
+  TcpRecord(unsigned src, unsigned dst): src(src), dst(dst) {}
+  FlowKey hash() const {
+    return src ^ (dst << 1);
   }
 };
 
@@ -60,7 +71,7 @@ class FlowCache {
   }
 };
 
-enum class FlowProcessorType { IPv4, Vlan };
+enum class FlowProcessorType { IPv4, Vlan, Tcp };
 
 class FlowCollector {
   using FlowProcessor = FlowKey (FlowCollector::*)(const pcpp::Layer*, FlowKey);
@@ -71,10 +82,9 @@ class FlowCollector {
 
   FlowCache<IPv4Record> ipv4_cache;
   FlowCache<VlanRecord> vlan_cache;
+  FlowCache<TcpRecord> tcp_cache;
 
   public:
-   // TODO: construct with processors
-   // while adding processor add printer as well
 
   FlowCollector(const std::vector<FlowProcessorType>& processors) {
     for (const auto& fpt : processors) {
@@ -86,6 +96,10 @@ class FlowCollector {
         case FlowProcessorType::IPv4:
           processor_chain.push_back(&FlowCollector::process_ipv4);
           printer_chain.push_back(&FlowCollector::print_ipv4);
+          break;
+        case FlowProcessorType::Tcp:
+          processor_chain.push_back(&FlowCollector::process_tcp);
+          printer_chain.push_back(&FlowCollector::print_tcp);
           break;
         default:
           break;
@@ -146,6 +160,34 @@ class FlowCollector {
     return record.hash();
   }
 
+  void print_tcp(FlowKey parent, unsigned level) const {
+    auto range = tcp_cache.for_parent(parent);
+    for (auto it = range.first; it != range.second; ++it) {
+      for (unsigned i = 0; i < level; ++i) std::cout << '\t';
+      std::cout << std::left << std::setw(8) << "TCP";
+      std::cout << std::left << std::setw(8) << it->second->count;
+      std::cout << std::left << std::setw(8) << it->second->src;
+      std::cout << std::left << std::setw(8) << it->second->dst;
+      std::cout << std::endl;
+
+      if (level + 1 >= printer_chain.size()) continue;
+      (this->*printer_chain[level + 1])(it->second->hash(), level + 1);
+    }
+  }
+
+  FlowKey process_tcp(const pcpp::Layer* layer, FlowKey parent) {
+    if (layer->getProtocol() != pcpp::TCP) return 0;
+
+    auto tcp = static_cast<const pcpp::TcpLayer*>(layer);
+
+    unsigned src = tcp->getTcpHeader()->portSrc;
+    unsigned dst = tcp->getTcpHeader()->portDst;
+    TcpRecord record{src, dst};
+    tcp_cache.handle(record, parent);
+
+    return record.hash();
+  }
+
   void print() const {
     if (!printer_chain.size()) return;
     (this->*printer_chain[0])(0, 0);
@@ -187,7 +229,7 @@ int main(int argc, char** argv) {
   if (argc != 2) return 1;
 
   auto reader = open_reader(argv[1]);
-  FlowCollector flow_collector({FlowProcessorType::IPv4});
+  FlowCollector flow_collector({FlowProcessorType::IPv4, FlowProcessorType::Tcp});
 
   pcpp::RawPacket raw_packet;
   while (reader->getNextPacket(raw_packet)) {
