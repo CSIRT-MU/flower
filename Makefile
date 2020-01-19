@@ -1,15 +1,19 @@
-include /usr/local/etc/PcapPlusPlus.mk
-
-CXX_FLAGS=-Wextra -Wall -pedantic -std=c++17 -g -O2 $(PCAPPP_BUILD_FLAGS)
-CXX_LIBS=$(PCAPPP_LIBS)
-CXX_LIBS_DIR=$(PCAPPP_LIBS_DIR)
-CXX_INCLUDES=$(PCAPPP_INCLUDES) -I include
+CXX_FLAGS=-Wextra -Wall -pedantic -std=c++17 -g -O2
+CXX_INCLUDES=-I include
 CXX_HEADERS=$(wildcard include/*.hpp)
 
-all: flower
+all: flower shared
+
+shared: shared/file_provider.so shared/interface_provider.so
+
+shared/file_provider.so: src/shared/file_provider.cpp
+	$(CXX) -shared -fPIC $(CXX_FLAGS) $(CXX_INCLUDES) -ltins $< -o $@
+
+shared/interface_provider.so: src/shared/interface_provider.cpp
+	$(CXX) -shared -fPIC $(CXX_FLAGS) $(CXX_INCLUDES) -ltins $< -o $@
 
 flower: src/main.cpp $(CXX_HEADERS)
-	$(CXX) $(CXX_FLAGS) $(CXX_INCLUDES) $(CXX_LIBS_DIR) $< -o $@ $(CXX_LIBS)
+	$(CXX) $(CXX_FLAGS) $(CXX_INCLUDES) -ldl $< -o $@
 
 clean:
 	rm flower
