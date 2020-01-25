@@ -25,13 +25,13 @@ int main(int argc, char** argv) {
 
   auto cache = FlowNode<IPv4Record>{};
 
-  do {
+  while (true) {
     auto packet = std::unique_ptr<RecordPacket>{
         reinterpret_cast<RecordPacket*>(file_provider->getPacket())};
     if (!packet) break;
 
     cache.insert(*packet);
-  } while (true);
+  }
 
   for (const auto& ip : cache) {
     std::cout << ip.first.src << " " << ip.first.dst << std::endl;

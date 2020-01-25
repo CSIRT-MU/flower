@@ -5,20 +5,6 @@
 
 #include "record.hpp"
 
-class FlowMatcher {
-  const std::set<FlowType> types;
-  public:
-  FlowMatcher(std::initializer_list<FlowType> types): types(types) {}
-
-  FlowType find_type(const FlowRecord& record) const {
-    auto res = types.find(record.type);
-    if (res == types.end())
-      return FlowType::OTHER;
-    
-    return *res;
-  }
-};
-
 struct FlowNodeEntry;
 
 template<typename T>
