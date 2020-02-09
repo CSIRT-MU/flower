@@ -13,7 +13,7 @@ shared/interface_provider.so: src/shared/interface_provider.cpp
 	$(CXX) -shared -fPIC $(CXX_FLAGS) $(CXX_INCLUDES) -lpcap $< -o $@
 
 flower: src/main.cpp $(CXX_HEADERS)
-	$(CXX) $(CXX_FLAGS) $(CXX_INCLUDES) -ldl $< -o $@
+	$(CXX) $(CXX_FLAGS) $(CXX_INCLUDES) -ldl -ltins $< -o $@
 
 clean:
 	rm flower

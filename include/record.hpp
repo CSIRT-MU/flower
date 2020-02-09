@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 enum class FlowType { IPv4, TCP, OTHER };
 
