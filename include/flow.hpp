@@ -17,7 +17,7 @@ std::size_t combine(T h) {
 
 template<typename T, typename... Args>
 std::size_t combine(T h, Args... args) {
-  return h ^ combine(args...);
+  return ((h<<6) + (h>>2) + 0x9e3779b9) ^ combine(args...);
 }
 
 class Iterator {
