@@ -10,75 +10,95 @@
 namespace IPFIX {
 
 static constexpr auto VERSION = uint16_t{0x000a};
+static constexpr auto BUFFER_SIZE = std::size_t{1024};
+
+#pragma pack(push)
+#pragma pack(1)
+struct MessageHeader {
+  uint16_t version;
+  uint16_t length;
+  uint32_t timestamp;
+  uint32_t sequence_num;
+  uint32_t domain_num;
+};
+
+struct RecordHeader {
+  uint16_t template_id;
+  uint16_t length;
+};
+
+struct TemplateHeader {
+  uint16_t id;
+  uint16_t length;
+  uint16_t template_id;
+  uint16_t field_count;
+};
+#pragma pack(pop)
 
 class Connection {
   std::unordered_map<std::size_t, std::size_t> templates;
   uint16_t template_id{256};
   std::size_t sequence_num{0};
 
+  uint8_t buffer[BUFFER_SIZE];
+  MessageHeader& msg_header = reinterpret_cast<MessageHeader&>(buffer);
+  uint8_t* pos = buffer + sizeof(MessageHeader);
+
   TCPSocket socket;
-
-  Payload create_template(const Flow::Record& record) {
-    auto result = Payload{};
-    auto t = record.template_body();
-
-    result << uint16_t{2};
-    result << static_cast<uint16_t>(t.data.size() + 8);
-    result << uint16_t{template_id};
-    result << static_cast<uint16_t>(t.data.size() / 4);
-    result += t;
-
-    ++template_id;
-    return result;
-  }
-
-  Payload create_record(const Flow::Record& record, uint16_t id) {
-    auto result = Payload{};
-    auto r = record.record_body();
-
-    result << id;
-    result << static_cast<uint16_t>(r.data.size() + 4);
-    result += r;
-
-    return result;
-  }
-
-  Payload create_message(const Payload& msg_body) {
-    auto result = Payload{};
-
-    result << VERSION;
-    result << static_cast<uint16_t>(msg_body.data.size() + 16);
-    result << uint32_t{0}; // TODO: Timestamp
-    result << static_cast<uint32_t>(sequence_num++);
-    result << uint32_t{0}; // TODO: Domain
-    result += msg_body;
-
-    return result;
-  }
 
   public:
 
   template<typename... Args>
   Connection(Args... args) {
     socket.connect(args...);
+    msg_header.version = htons(VERSION);
   }
 
-  void send_record(const Flow::Record& record) {
-    auto hash = record.type_hash();
-    auto id = uint16_t{0};
-    auto msg_body = Payload{};
+  std::size_t free() const {
+    return buffer + BUFFER_SIZE - pos;
+  }
 
-    auto search = templates.find(hash);
+  std::size_t length() const {
+    return pos - buffer;
+  }
+
+  void to_export(const Flow::Record& record) {
+    auto type = record.type_hash();
+    auto id = std::size_t{};
+
+    // Find if template was created
+    auto search = templates.find(type);
     if (search == templates.end()) {
-      id = template_id;
-      msg_body += create_template(record);
-      templates[hash] = id;
+      templates.emplace(type, template_id);
+      id = template_id++;
+
+      // Send template
+      auto& template_header = reinterpret_cast<TemplateHeader&>(*pos);
+      pos += sizeof(TemplateHeader);
+      template_header.id = htons(2);
+      template_header.length = htons(record.template_length() + 8);
+      template_header.template_id = htons(id);
+      template_header.field_count = htons(record.template_fields());
+      pos = record.export_template(pos);
     } else {
       id = search->second;
     }
+    // TODO: Buffer overflow
 
-    msg_body += create_record(record, id);
-    socket << create_message(msg_body).data;
+    // Send record
+    auto& record_header = reinterpret_cast<RecordHeader&>(*pos);
+    pos += sizeof(RecordHeader);
+    record_header.template_id = htons(id);
+    record_header.length = htons(record.record_length() + 4);
+    pos = record.export_record(pos);
+
+    // Send message
+    msg_header.length = htons(length());
+    msg_header.timestamp = 0;
+    msg_header.sequence_num = htonl(sequence_num);
+    msg_header.domain_num = 0;
+    socket.send(buffer, length());
+    pos = buffer + sizeof(MessageHeader);
   }
 };
 

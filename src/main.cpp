@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
 
   /* EXPORT */
   for (auto& record: cache.records()) {
-    connection.send_record(record);
+    connection.to_export(record);
   }
 
   return 0;

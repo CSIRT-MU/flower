@@ -61,15 +61,31 @@ class Record {
         });
   }
 
-  Payload template_body() const {
-    return std::accumulate(begin(), end(), Payload{}, [](auto a, const auto& x){
-        return a += x.template_body();
+  std::size_t record_length() const {
+    return std::accumulate(begin(), end(), 0, [](auto a, const auto& e){
+        return a + e.record_length();
         });
   }
 
-  Payload record_body() const {
-    return std::accumulate(begin(), end(), Payload{}, [](auto a, const auto& x){
-        return a += x.record_body();
+  std::size_t template_length() const {
+    return std::accumulate(begin(), end(), 0, [](auto a, const auto& e){
+        return a + e.template_length();
+        });
+  }
+
+  std::size_t template_fields() const {
+    return template_length() / 4;
+  }
+  
+  uint8_t* export_record(uint8_t* buffer) const {
+    return std::accumulate(begin(), end(), buffer, [](auto b, const auto& e){
+        return e.export_record(b);
+        });
+  }
+
+  uint8_t* export_template(uint8_t* buffer) const {
+    return std::accumulate(begin(), end(), buffer, [](auto b, const auto& e){
+        return e.export_template(b);
         });
   }
 };
@@ -113,7 +129,7 @@ class Cache {
       }
     }
 
-    last.emplace_back(prev); // TODO: Only emplace one last
+    if (prev) last.emplace_back(prev);
   }
 
   auto records() const {
