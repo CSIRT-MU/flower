@@ -6,9 +6,12 @@
 #include "ipfix.hpp"
 
 int main(int argc, char** argv) {
-  if (argc != 2) return 1;
+  if (argc != 3) return 1;
 
-  auto provider = PacketProvider{Plugin{"shared/file_provider.so"}, argv[1]};
+  Plugin plugin = argv[1][1] == 'F'
+    ? Plugin{"shared/file_provider.so"}
+    : Plugin{"shared/interface_provider.so"};
+  auto provider = PacketProvider{std::move(plugin), argv[2]};
   auto connection = IPFIX::Connection{"127.0.0.1", 20'000};
   auto cache = Flow::Cache{};
 
