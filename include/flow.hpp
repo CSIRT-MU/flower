@@ -21,11 +21,11 @@ std::size_t combine(T h, Args... args) {
 }
 
 class Iterator {
-  const Entry* entry;
+  Entry* entry;
 
   public:
 
-  Iterator(const Entry* entry): entry{entry} {}
+  Iterator(Entry* entry): entry{entry} {}
   Iterator(): Iterator{nullptr} {}
 
   Iterator& operator++() {
@@ -42,18 +42,31 @@ class Iterator {
   }
 
   const Entry& operator*() const { return *entry; }
-  const Entry& operator->() const { return *entry; }
+  const Entry* operator->() const { return entry; }
+  Entry& operator*() { return *entry; }
+  Entry* operator->() { return entry; }
 };
 
 class Record {
-  const Iterator start;
+  Iterator start;
 
   public:
 
-  Record(const Entry* entry): start{entry} {}
+  Record(Entry* entry): start{entry} {}
 
   Iterator begin() const { return start; }
   Iterator end() const { return nullptr; }
+
+  void clean() {
+    auto count = start->count;
+    std::for_each(begin(), end(), [count](auto& e){
+        e.count -= count;
+        });
+  }
+
+  bool empty() const {
+    return !start->count;
+  }
 
   std::size_t type_hash() const {
     return std::accumulate(begin(), end(), 0, [](auto a, const auto& x){

@@ -46,12 +46,51 @@ class Connection {
 
   TCPSocket socket;
 
+  void export_template(const Flow::Record& record, std::size_t id) {
+    // Check if buffer is full and send if true
+    auto total_length = record.template_length() + sizeof(TemplateHeader);
+    if (total_length > free()) send();
+
+    auto& template_header = reinterpret_cast<TemplateHeader&>(*pos);
+    pos += sizeof(TemplateHeader);
+    template_header.id = htons(2);
+    template_header.length = htons(total_length);
+    template_header.template_id = htons(id);
+    template_header.field_count = htons(record.template_fields());
+    pos = record.export_template(pos);
+  }
+
+  void export_record(const Flow::Record& record, std::size_t id) {
+    // Do not export record with count 0
+    if (record.empty()) return;
+
+    // Check if buffer is full and send if true
+    auto total_length = record.record_length() + sizeof(RecordHeader);
+    if (total_length > free()) send();
+    
+    auto& record_header = reinterpret_cast<RecordHeader&>(*pos);
+    pos += sizeof(RecordHeader);
+    record_header.template_id = htons(id);
+    record_header.length = htons(total_length);
+    pos = record.export_record(pos);
+  }
+
   public:
 
   template<typename... Args>
   Connection(Args... args) {
     socket.connect(args...);
     msg_header.version = htons(VERSION);
+  }
+
+
+  ~Connection() {
+    if (!empty())
+      send();
+  }
+
+  bool empty() const {
+    return pos == buffer + sizeof(MessageHeader);
   }
 
   std::size_t free() const {
@@ -62,7 +101,7 @@ class Connection {
     return pos - buffer;
   }
 
-  void to_export(const Flow::Record& record) {
+  void to_export(Flow::Record& record) {
     auto type = record.type_hash();
     auto id = std::size_t{};
 
@@ -71,30 +110,19 @@ class Connection {
     if (search == templates.end()) {
       templates.emplace(type, template_id);
       id = template_id++;
-
-      // Send template
-      auto& template_header = reinterpret_cast<TemplateHeader&>(*pos);
-      pos += sizeof(TemplateHeader);
-      template_header.id = htons(2);
-      template_header.length = htons(record.template_length() + 8);
-      template_header.template_id = htons(id);
-      template_header.field_count = htons(record.template_fields());
-      pos = record.export_template(pos);
+      export_template(record, id);
     } else {
       id = search->second;
     }
-    // TODO: Buffer overflow
 
     // Send record
-    auto& record_header = reinterpret_cast<RecordHeader&>(*pos);
-    pos += sizeof(RecordHeader);
-    record_header.template_id = htons(id);
-    record_header.length = htons(record.record_length() + 4);
-    pos = record.export_record(pos);
+    export_record(record, id);
+    record.clean();
+  }
 
-    // Send message
+  void send() {
     msg_header.length = htons(length());
-    msg_header.timestamp = 0;
+    msg_header.timestamp = 0; // TODO: Fill with timestamp
     msg_header.sequence_num = htonl(sequence_num);
     msg_header.domain_num = 0;
     socket.send(buffer, length());

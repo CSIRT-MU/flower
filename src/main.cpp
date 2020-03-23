@@ -14,11 +14,18 @@ int main(int argc, char** argv) {
 
   auto st = ScopedTimer{__func__};
 
-  for (;;) {
+  for (int i = 0;;++i) {
     auto raw = provider.get_packet();
     if (!raw.data) break;
     auto parsed = Tins::EthernetII{raw.data, static_cast<uint32_t>(raw.caplen)};
     cache.insert(parsed);
+
+    if (i >= 10) {
+      for (auto& record: cache.records()) {
+        connection.to_export(record);
+      }
+      i = 0;
+    }
   }
 
   /* EXPORT */

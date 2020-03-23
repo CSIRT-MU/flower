@@ -32,7 +32,7 @@ struct IP: public Entry {
   std::size_t record_length() const override { return 8; }
 
   uint8_t* export_template(uint8_t* buffer) const override {
-    static uint16_t t[4] = { htons(8), htons(4), htons(12), htons(4) };
+    static const uint16_t t[4] = { htons(8), htons(4), htons(12), htons(4) };
     memcpy(buffer, t, sizeof(t));
     buffer += sizeof(t);
     return buffer;
@@ -62,7 +62,7 @@ struct TCP: public Entry {
   std::size_t record_length() const override { return 4; }
 
   uint8_t* export_template(uint8_t* buffer) const override {
-    static uint16_t t[4] = { htons(7), htons(2), htons(11), htons(2) };
+    static const uint16_t t[4] = { htons(7), htons(2), htons(11), htons(2) };
     memcpy(buffer, t, sizeof(t));
     buffer += sizeof(t);
     return buffer;
