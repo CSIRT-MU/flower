@@ -3,10 +3,10 @@
 #include "plugin.hpp"
 
 struct Packet {
-  const unsigned char* data;
-  size_t len;
-  size_t caplen;
-  int timestamp;
+  const uint8_t* data;
+  uint32_t len;
+  uint32_t caplen;
+  uint32_t timestamp;
 };
 
 class PacketProvider {

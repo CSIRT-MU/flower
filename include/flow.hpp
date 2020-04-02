@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include <numeric>
+#include <cassert>
 
 #include <tins/tins.h>
 
@@ -77,13 +78,13 @@ class Record {
   std::size_t record_length() const {
     return std::accumulate(begin(), end(), 0, [](auto a, const auto& e){
         return a + e.record_length();
-        });
+        }) + 4;
   }
 
   std::size_t template_length() const {
     return std::accumulate(begin(), end(), 0, [](auto a, const auto& e){
         return a + e.template_length();
-        });
+        }) + 4;
   }
 
   std::size_t template_fields() const {
@@ -91,12 +92,21 @@ class Record {
   }
   
   uint8_t* export_record(uint8_t* buffer) const {
+    auto delta = htonl(start->count);
+    memcpy(buffer, &delta, sizeof(delta));
+    buffer += sizeof(delta);
+
     return std::accumulate(begin(), end(), buffer, [](auto b, const auto& e){
         return e.export_record(b);
         });
   }
 
   uint8_t* export_template(uint8_t* buffer) const {
+    // Add packet delta
+    static const uint16_t delta[2] = { htons(2), htons(4) };
+    memcpy(buffer, delta, sizeof(delta));
+    buffer += sizeof(delta);
+
     return std::accumulate(begin(), end(), buffer, [](auto b, const auto& e){
         return e.export_template(b);
         });
@@ -116,7 +126,7 @@ class Cache {
     for (const auto& pdu: Tins::iterate_pdus(packet)) {
       // IP
       if (pdu.pdu_type() == Tins::PDU::PDUType::IP) {
-        auto ip = static_cast<const Tins::IP&>(pdu);
+        auto& ip = static_cast<const Tins::IP&>(pdu);
         hash = combine(hash, ip.src_addr(), ip.dst_addr());
         auto search = ip_cache.find(hash);
         if (search == ip_cache.end()) {
@@ -124,12 +134,12 @@ class Cache {
           auto [placed, _] = ip_cache.emplace(hash, entry);
           prev = &(placed->second);
         } else {
-          search->second.count++;
+          search->second.count += 1;
         }
       }
       // TCP
       if (pdu.pdu_type() == Tins::PDU::PDUType::TCP) {
-        auto tcp = static_cast<const Tins::TCP&>(pdu);
+        auto& tcp = static_cast<const Tins::TCP&>(pdu);
         hash = combine(hash, tcp.sport(), tcp.dport());
         auto search = tcp_cache.find(hash);
         if (search == tcp_cache.end()) {
@@ -137,15 +147,18 @@ class Cache {
           auto [placed, _] = tcp_cache.emplace(hash, entry);
           prev = &(placed->second);
         } else {
-          search->second.count++;
+          search->second.count += 1;
         }
       }
     }
 
-    if (prev) last.emplace_back(prev);
+    if (prev) {
+      last.emplace_back(prev);
+    }
   }
 
-  auto records() const {
+  auto& records() {
+    // TODO: Add export that removes from last
     return last;
   }
 };

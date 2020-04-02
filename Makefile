@@ -1,4 +1,4 @@
-CXX_FLAGS=-Wextra -Wall -pedantic -std=c++17 -g -O2
+CXX_FLAGS=-Wextra -Wall -pedantic -std=c++17 -g
 CXX_INCLUDES=-I include
 CXX_HEADERS=$(wildcard include/*.hpp)
 

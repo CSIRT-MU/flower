@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <ctime>
 
 #include <tins/tins.h>
 
@@ -61,9 +62,6 @@ class Connection {
   }
 
   void export_record(const Flow::Record& record, std::size_t id) {
-    // Do not export record with count 0
-    if (record.empty()) return;
-
     // Check if buffer is full and send if true
     auto total_length = record.record_length() + sizeof(RecordHeader);
     if (total_length > free()) send();
@@ -110,19 +108,22 @@ class Connection {
     if (search == templates.end()) {
       templates.emplace(type, template_id);
       id = template_id++;
+      // TODO: Check if template_id id not overflow
       export_template(record, id);
     } else {
       id = search->second;
     }
 
     // Send record
+    // Do not export record with count 0
+    if (record.empty()) return;
     export_record(record, id);
     record.clean();
   }
 
   void send() {
     msg_header.length = htons(length());
-    msg_header.timestamp = 0; // TODO: Fill with timestamp
+    msg_header.timestamp = htonl(std::time(nullptr));
     msg_header.sequence_num = htonl(sequence_num);
     msg_header.domain_num = 0;
     socket.send(buffer, length());
