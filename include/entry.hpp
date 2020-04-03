@@ -39,8 +39,8 @@ struct IP: public Entry {
   }
 
   uint8_t* export_record(uint8_t* buffer) const override {
-    auto nsrc = htonl(src);
-    auto ndst = htonl(dst);
+    auto nsrc = src;
+    auto ndst = dst;
     memcpy(buffer, &nsrc, sizeof(nsrc));
     buffer = buffer + sizeof(nsrc);
     memcpy(buffer, &ndst, sizeof(ndst));

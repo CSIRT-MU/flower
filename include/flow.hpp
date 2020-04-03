@@ -122,6 +122,7 @@ class Cache {
 
   void insert(const Tins::PDU& packet) {
     auto hash = std::size_t{0};
+    auto inserted = false;
     Entry* prev = nullptr;
     for (const auto& pdu: Tins::iterate_pdus(packet)) {
       // IP
@@ -133,8 +134,11 @@ class Cache {
           auto entry = IP{ip.src_addr(), ip.dst_addr(), prev};
           auto [placed, _] = ip_cache.emplace(hash, entry);
           prev = &(placed->second);
+          inserted = true;
         } else {
           search->second.count += 1;
+          prev = &(search->second);
+          inserted = false;
         }
       }
       // TCP
@@ -146,15 +150,17 @@ class Cache {
           auto entry = TCP{tcp.sport(), tcp.dport(), prev};
           auto [placed, _] = tcp_cache.emplace(hash, entry);
           prev = &(placed->second);
+          inserted = true;
         } else {
           search->second.count += 1;
+          prev = &(search->second);
+          inserted = false;
         }
       }
     }
 
-    if (prev) {
+    if (inserted)
       last.emplace_back(prev);
-    }
   }
 
   auto& records() {
