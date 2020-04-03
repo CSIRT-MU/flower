@@ -45,7 +45,7 @@ class Connection {
   MessageHeader& msg_header = reinterpret_cast<MessageHeader&>(buffer);
   uint8_t* pos = buffer + sizeof(MessageHeader);
 
-  TCPSocket socket;
+  net::Connection conn;
 
   void export_template(const Flow::Record& record, std::size_t id) {
     // Check if buffer is full and send if true
@@ -76,8 +76,8 @@ class Connection {
   public:
 
   template<typename... Args>
-  Connection(Args... args) {
-    socket.connect(args...);
+  Connection(Args... args):
+    conn(net::make_tcp_connection(args...)){
     msg_header.version = htons(VERSION);
   }
 
@@ -126,7 +126,7 @@ class Connection {
     msg_header.timestamp = htonl(std::time(nullptr));
     msg_header.sequence_num = htonl(sequence_num);
     msg_header.domain_num = 0;
-    socket.send(buffer, length());
+    conn.write(buffer, length());
     pos = buffer + sizeof(MessageHeader);
   }
 };
