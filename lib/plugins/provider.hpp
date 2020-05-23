@@ -1,13 +1,7 @@
 #pragma once
 
-#include "plugin.hpp"
-
-struct Packet {
-  const uint8_t* data;
-  uint32_t len;
-  uint32_t caplen;
-  uint32_t timestamp;
-};
+#include <plugin.hpp>
+#include <provider.h>
 
 class PacketProvider {
   using GetPacketFun = Packet(*)();
@@ -18,7 +12,9 @@ class PacketProvider {
   GetPacketFun get_packet_;
   InitFun init_;
   FinalizeFun finalize_;
+
   public:
+
   PacketProvider(Plugin&& plugin, const char* arg):
     plugin{std::move(plugin)},
     get_packet_{this->plugin.function<Packet()>("get_packet")},

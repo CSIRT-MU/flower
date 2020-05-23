@@ -3,11 +3,10 @@
 #include <unordered_map>
 #include <vector>
 #include <numeric>
-#include <cassert>
 
 #include <tins/tins.h>
 
-#include "entry.hpp"
+#include <entry.hpp>
 
 namespace Flow {
 

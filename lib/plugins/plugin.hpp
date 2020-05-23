@@ -1,13 +1,7 @@
 #pragma once
 
-#include "shared_object.hpp"
-
-enum class PluginType { PacketProvider };
-
-struct PluginInfo {
-  const char* name;
-  PluginType type;
-};
+#include <shared_object.hpp>
+#include <plugin.h>
 
 class Plugin: public SharedObject {
   PluginInfo info_;

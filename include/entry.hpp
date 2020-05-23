@@ -1,7 +1,5 @@
 #pragma once
 
-#include <array>
-
 #include <tins/tins.h>
 
 struct Entry {
