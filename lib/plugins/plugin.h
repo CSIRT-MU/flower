@@ -1,8 +1,17 @@
 #pragma once
 
-enum PluginType { PacketProvider };
-
+/**
+ * Structure used to define every plugin.
+ */
 struct PluginInfo {
+  /**
+   * Name should be unique for every plugin type.
+   */
   const char* name;
-  enum PluginType type;
+
+  /**
+   * Type is used as enum. Name together with type 
+   * uniquely define each plugin.
+   */
+  int type;
 };

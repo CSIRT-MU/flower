@@ -9,7 +9,7 @@ int main(int argc, char** argv) {
 
   // auto plugins = Plugins::Manager{"/var/lib/flower/"};
   // auto plugin = Plugin{""};
-  auto provider = PacketProvider{};
+  // auto provider = PacketProvider{};
   auto connection = IPFIX::Connection{"127.0.0.1", 20'000};
   auto cache = Flow::Cache{};
 
