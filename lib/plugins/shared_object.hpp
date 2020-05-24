@@ -8,15 +8,23 @@
 
 namespace Plugins {
 
+constexpr auto PLUGIN_EXTENSION = ".so";
+
 /**
  * RAII class representing linkable objects. The inner linkable object
  * will be closed on destruction. This might lead to error when function
  * pointers point to freed resource.
  */
 class SharedObject {
-  void* handle;
+  void* handle = nullptr;
 
 public:
+
+  /**
+   * Creates shared object in invalid state,
+   * used for move operations.
+   */
+  SharedObject() noexcept = default;
 
   /**
    * Creates shared object from file path.
@@ -33,6 +41,7 @@ public:
   explicit SharedObject(const std::string& file):
     SharedObject(file.c_str()) {}
 
+  // TODO(dudoslav): Find if virtual is necessary
   virtual ~SharedObject() {
     if (handle != nullptr) {
       dlclose(handle);

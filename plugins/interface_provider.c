@@ -1,21 +1,20 @@
 #include <pcap.h>
 
-#include <plugin.h>
-#include <provider.h>
+#include <input.h>
 
 pcap_t* handle;
 char errbuf[PCAP_ERRBUF_SIZE];
 
 struct PluginInfo info() {
   struct PluginInfo result;
-  result.type = PacketProvider;
-  result.name = "InterfacePacketProvider";
+  result.type = INPUT_PLUGIN;
+  result.name = "InterfaceInput";
   return result;
 }
 
 void init(const char* arg) {
   handle = pcap_open_live(arg, BUFSIZ, 1, 1000, errbuf);
-  // TODO: Handle error
+  // TODO(dudoslav): Handle error
 }
 
 void finalize() {

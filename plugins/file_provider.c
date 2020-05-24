@@ -1,15 +1,14 @@
 #include <pcap.h>
 
-#include <plugin.h>
-#include <provider.h>
+#include <input.h>
 
 pcap_t* handle;
 char errbuf[PCAP_ERRBUF_SIZE];
 
 struct PluginInfo info() {
   struct PluginInfo result;
-  result.type = PacketProvider;
-  result.name = "FilePacketProvider";
+  result.type = INPUT_PLUGIN;
+  result.name = "FileInput";
   return result;
 }
 

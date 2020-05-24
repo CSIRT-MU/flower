@@ -1,35 +1,57 @@
+#include <iostream>
+
 #include <tins/tins.h>
 
-#include <provider.hpp>
+#include <arguments.hpp>
 #include <flow.hpp>
-#include <ipfix.hpp>
+#include <manager.hpp>
+
+static void start(Plugins::Input input) {
+  for (;;) {
+    auto raw = input.get_packet();
+    if (raw.data == nullptr) {
+      return;
+    }
+
+    auto packet = Tins::EthernetII{raw.data, raw.caplen};
+    for (const auto& pdu: Tins::iterate_pdus(packet)) {
+      std::cout << Tins::Utils::to_string(pdu.pdu_type()) << " -> ";
+    }
+    std::cout << "END" << std::endl;
+  }
+}
 
 int main(int argc, char** argv) {
-  if (argc != 3) return 1;
+  auto options = Arguments::Options{};
+  try {
+    options = Arguments::parse(argc, argv);
+  } catch (std::runtime_error& e) {
+    std::cerr << e.what() << std::endl;
+    return 2;
+  }
 
-  // auto plugins = Plugins::Manager{"/var/lib/flower/"};
-  // auto plugin = Plugin{""};
-  // auto provider = PacketProvider{};
-  auto connection = IPFIX::Connection{"127.0.0.1", 20'000};
-  auto cache = Flow::Cache{};
+  auto plugin_manager = Plugins::Manager{"plugins"};
 
-  // for (int i = 0;; ++i) {
-  //   auto raw = provider.get_packet();
-  //   if (!raw.data) break;
-  //   auto parsed = Tins::EthernetII{raw.data, static_cast<uint32_t>(raw.caplen)};
-  //   cache.insert(parsed);
-
-  //   if (i >= 200) {
-  //     for (auto& record: cache.records()) {
-  //       connection.to_export(record);
-  //     }
-  //     i = 0;
-  //   }
-  // }
-
-  /* EXPORT */
-  for (auto& record: cache.records()) {
-    connection.to_export(record);
+  switch (options.activity) {
+    case Arguments::Activity::LIST_PLUGINS:
+      std::cout << "Input plugins:" << std::endl;
+      for (const auto& p: plugin_manager.inputs()) {
+        std::cout << p.info().name << std::endl;
+      }
+      break;
+    case Arguments::Activity::SHOW_USAGE:
+      std::cout << "./flower [options]..." << std::endl;
+      break;
+    case Arguments::Activity::MAIN_ACTIVITY:
+      try {
+        auto input = plugin_manager.create_input(options.input_name,
+            options.input_argument.c_str());
+        start(std::move(input));
+      } catch (std::runtime_error& e) {
+        std::cerr << e.what() << std::endl;
+        return 3;
+      }
+      break;
   }
 
   return 0;
