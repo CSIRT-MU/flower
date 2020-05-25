@@ -1,77 +1,62 @@
 #pragma once
 
-#include <tins/tins.h>
+#include <list>
+#include <variant>
 
-struct Entry {
-  Tins::PDU::PDUType type;
-  Entry* prev;
-  std::size_t count{1};
+namespace Flow {
 
-  Entry(Tins::PDU::PDUType type, Entry* prev): type{type}, prev{prev} {}
-  virtual ~Entry() = default;
-
-  virtual std::size_t template_length() const = 0;
-  virtual std::size_t record_length() const = 0;
-  virtual uint8_t* export_template(uint8_t* buffer) const = 0;
-  virtual uint8_t* export_record(uint8_t* buffer) const = 0;
+struct IP {
+  unsigned src;
+  unsigned dst;
 };
 
-struct IP: public Entry {
-  uint32_t src;
-  uint32_t dst;
-
-  template<typename... Args>
-  IP(uint32_t src, uint32_t dst, Args... args):
-    Entry{Tins::PDU::PDUType::IP, args...},
-    src{src},
-    dst{dst} {}
-
-  std::size_t template_length() const override { return 8; }
-  std::size_t record_length() const override { return 8; }
-
-  uint8_t* export_template(uint8_t* buffer) const override {
-    static const uint16_t t[4] = { htons(8), htons(4), htons(12), htons(4) };
-    memcpy(buffer, t, sizeof(t));
-    buffer += sizeof(t);
-    return buffer;
-  }
-
-  uint8_t* export_record(uint8_t* buffer) const override {
-    auto nsrc = src;
-    auto ndst = dst;
-    memcpy(buffer, &nsrc, sizeof(nsrc));
-    buffer = buffer + sizeof(nsrc);
-    memcpy(buffer, &ndst, sizeof(ndst));
-    return buffer + sizeof(ndst);
-  }
+struct TCP {
+  unsigned src;
+  unsigned dst;
 };
 
-struct TCP: public Entry {
-  uint16_t src;
-  uint16_t dst;
+using Entry = std::variant<IP, TCP>;
+using Record = std::list<Entry>;
 
-  template<typename... Args>
-  TCP(uint16_t src, uint16_t dst, Args... args):
-    Entry{Tins::PDU::PDUType::TCP, args...},
-    src{src},
-    dst{dst} {}
+/**
+ * Hash function of arbitrary arity. This function MUST BE commutative.
+ * @param args numbers to reduce to one hash
+ * @return hash reduced from all provided numbers
+ */
+template<typename F, typename... N>
+constexpr std::size_t combine(F f, N... n) {
+  constexpr std::size_t SHIFT_LEFT = 6;
+  constexpr std::size_t SHIFT_RIGHT = 2;
+  constexpr std::size_t SEED = 0x9e3779b9;
 
-  std::size_t template_length() const override { return 8; }
-  std::size_t record_length() const override { return 4; }
+  auto args = { f, n... };
 
-  uint8_t* export_template(uint8_t* buffer) const override {
-    static const uint16_t t[4] = { htons(7), htons(2), htons(11), htons(2) };
-    memcpy(buffer, t, sizeof(t));
-    buffer += sizeof(t);
-    return buffer;
+  return std::reduce(args.begin(), args.end(), 0,
+      [](std::size_t acc, std::size_t a) constexpr {
+      return a ^ ((acc<<SHIFT_LEFT) + (acc>>SHIFT_RIGHT) + SEED);
+      });
+}
+
+inline std::size_t digest(const IP& ip) {
+  return combine(ip.src, ip.dst);
+}
+
+inline std::size_t digest(const TCP& tcp) {
+  return combine(tcp.src, tcp.dst);
+}
+
+inline std::size_t digest(const Entry& entry) {
+  return std::visit([](const auto& v){ return digest(v); }, entry);
+}
+
+inline std::size_t digest(const Record& record) {
+  auto result = digest(record.front());
+
+  for (auto it = ++(record.cbegin()); it != record.cend(); ++it) {
+    result = combine(result, digest(*it));
   }
 
-  uint8_t* export_record(uint8_t* buffer) const override {
-    auto nsrc = htons(src);
-    auto ndst = htons(dst);
-    memcpy(buffer, &nsrc, sizeof(nsrc));
-    buffer = buffer + sizeof(nsrc);
-    memcpy(buffer, &ndst, sizeof(ndst));
-    return buffer + sizeof(ndst);
-  }
-};
+  return result;
+}
+
+} // namespace Flow
