@@ -1,16 +1,19 @@
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <vector>
 
-namespace Arguments {
+namespace Options {
 
 static constexpr auto INPUT_PLUGIN_FLAG = "-I";
 
 static constexpr auto LIST_PLUGINS_LONG_FLAG = "--list-plugins";
 static constexpr auto INPUT_PLUGIN_LONG_FLAG = "--input-plugin";
+static constexpr auto EXPORT_INTERVAL_LONG_FLAG = "--export-interval";
 
 static constexpr auto DEFAULT_INPUT = "FileInput";
+static constexpr auto DEFAULT_EXPORT_INTERVAL = std::chrono::seconds{10};
 
 enum Activity { LIST_PLUGINS, SHOW_USAGE, MAIN_ACTIVITY };
 
@@ -18,7 +21,14 @@ struct Options {
   Activity activity = Activity::SHOW_USAGE;
   std::string input_name = DEFAULT_INPUT;
   std::string input_argument = "";
+  std::chrono::seconds export_interval = DEFAULT_EXPORT_INTERVAL;
 };
+
+static auto global_options = Options{};
+
+inline const Options& instance() {
+  return global_options;
+}
 
 /**
  * Simple parser class designed to parse command line arguments.
@@ -32,13 +42,21 @@ class Parser {
   Arguments _arguments;
   Options _options;
 
-  void list_plugins(Argument& argument) {
+  void input_plugin(Argument& argument) {
     if (argument + 1 == _arguments.cend()) {
-      throw std::runtime_error{"Input plugin requires 1 arguments"};
+      throw std::runtime_error{"Input plugin requires 1 argument"};
     }
 
-    _options.activity = Activity::MAIN_ACTIVITY;
     _options.input_name = *(++argument);
+  }
+
+  void export_interval(Argument& argument) {
+    if (argument + 1 == _arguments.cend()) {
+      throw std::runtime_error{"Export interval requires 1 argument"};
+    }
+
+    // TODO(dudoslav): Try-catch std::stoi exception
+    _options.export_interval = std::chrono::seconds{std::stoi(*(++argument))};
   }
 
 public:
@@ -50,11 +68,13 @@ public:
           if (*arg == LIST_PLUGINS_LONG_FLAG) {
             _options.activity = Activity::LIST_PLUGINS;
           } else if (*arg == INPUT_PLUGIN_LONG_FLAG) {
-            list_plugins(arg);
+            input_plugin(arg);
+          } else if (*arg == EXPORT_INTERVAL_LONG_FLAG) {
+            export_interval(arg);
           }
         } else if (arg->starts_with("-")) {
           if (*arg == INPUT_PLUGIN_FLAG) {
-            list_plugins(arg);
+            input_plugin(arg);
           }
         } else {
           _options.activity = Activity::MAIN_ACTIVITY;
@@ -70,13 +90,14 @@ public:
 
 /**
  * Function that parses command line arguments. The supplied arguments
- * must be in the same format as arguments of main() function.
+ * must be in the same format as arguments of main() function. The result
+ * is saved in the global singleton.
+ * @see Options::instance()
  * @param argc number of arguments
  * @param argv array of arguments
- * @return Options structure filled with parsed arguments
  */
-inline Options parse(int argc, char** argv) {
-  return Parser(argc, argv).options();
+inline void parse(int argc, char** argv) {
+  global_options = Parser(argc, argv).options();
 }
 
-} // namespace Arguments
+} // namespace Options

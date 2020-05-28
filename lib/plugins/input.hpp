@@ -66,7 +66,12 @@ public:
     }
   }
 
-  // TODO(dudoslav): When should we end reading?
+  /**
+   * Gets packet from plugin. This packet must be valid until next get_packet
+   * is called and the data provided are freed by the plugin. This is not a
+   * thread safe call.
+   * @return Packet packet provided by plugin, if empty packet.data is equal to nullptr
+   */
   Packet get_packet() {
     return _get_packet();
   }

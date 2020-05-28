@@ -1,25 +1,38 @@
 #pragma once
 
-#include <list>
+#include <initializer_list>
+#include <numeric>
 #include <variant>
+#include <vector>
 
 namespace Flow {
 
+// TODO(dudoslav): Rework digest as class method
+
 struct IP {
-  unsigned src;
-  unsigned dst;
+  uint32_t src;
+  uint32_t dst;
 };
 
 struct TCP {
-  unsigned src;
-  unsigned dst;
+  uint16_t src;
+  uint16_t dst;
 };
 
-using Entry = std::variant<IP, TCP>;
-using Record = std::list<Entry>;
+struct UDP {
+  uint16_t src;
+  uint16_t dst;
+};
+
+struct DOT1Q {
+  uint16_t id;
+};
+
+using Protocol = std::variant<IP, TCP, UDP, DOT1Q>;
+using Record = std::vector<Protocol>;
 
 /**
- * Hash function of arbitrary arity. This function MUST BE commutative.
+ * Hash function of arbitrary arity. This function MUST BE non commutative.
  * @param args numbers to reduce to one hash
  * @return hash reduced from all provided numbers
  */
@@ -45,8 +58,16 @@ inline std::size_t digest(const TCP& tcp) {
   return combine(tcp.src, tcp.dst);
 }
 
-inline std::size_t digest(const Entry& entry) {
-  return std::visit([](const auto& v){ return digest(v); }, entry);
+inline std::size_t digest(const UDP& udp) {
+  return combine(udp.src, udp.dst);
+}
+
+inline std::size_t digest(const DOT1Q& dot1q) {
+  return combine(dot1q.id);
+}
+
+inline std::size_t digest(const Protocol& protocol) {
+  return std::visit([](const auto& v){ return digest(v); }, protocol);
 }
 
 inline std::size_t digest(const Record& record) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -15,19 +16,23 @@ class Manager {
 public:
 
   explicit Manager(const std::string& path) {
-    if (!std::filesystem::is_directory(path)) {
-      return;
-    }
-
-    for (const auto& f: std::filesystem::directory_iterator(path)) {
-      if (f.path().extension() == PLUGIN_EXTENSION) {
-        auto plugin = Plugin{f.path()};
-        switch (plugin.info().type) {
-          case INPUT_PLUGIN:
-            _inputs.emplace_back(std::move(plugin));
-            break;
+    try {
+      for (const auto& f: std::filesystem::directory_iterator(path)) {
+        if (f.path().extension() == PLUGIN_EXTENSION) {
+          try {
+            auto plugin = Plugin{f.path()};
+            switch (plugin.info().type) {
+              case INPUT_PLUGIN:
+                _inputs.emplace_back(std::move(plugin));
+                break;
+            }
+          } catch (const std::runtime_error& e) {
+            std::cerr << "Failed to load plugin: " << e.what() << std::endl;
+          }
         }
       }
+    } catch (const std::filesystem::filesystem_error& e) {
+      std::cerr << "Failed to traverse plugin directory: " << e.what() << std::endl;
     }
   }
 
@@ -45,7 +50,7 @@ public:
     return {std::move(*search), arg};
   }
 
-  const auto& inputs() {
+  [[nodiscard]] const auto& inputs() const {
     return _inputs;
   }
 };

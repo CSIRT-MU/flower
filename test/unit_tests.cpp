@@ -13,11 +13,11 @@ TEST(Combine, Basic) {
   ASSERT_NE(Flow::combine(4, 5, 6), Flow::combine(6, 5, 4));
 }
 
-TEST(Digest, Entry) {
+TEST(Digest, Protocol) {
   using namespace Flow;
 
-  auto e1 = Entry{IP{123456789, 987654321}};
-  auto e2 = Entry{IP{987654321, 123456789}};
+  auto e1 = Protocol{IP{123456789, 987654321}};
+  auto e2 = Protocol{IP{987654321, 123456789}};
 
   ASSERT_NE(digest(e1), digest(e2));
 }
