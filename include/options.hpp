@@ -1,10 +1,15 @@
 #pragma once
 
 #include <chrono>
+#include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
 
 namespace Options {
+
+static constexpr auto CONFIG_SEPARATOR = '=';
+static constexpr auto CONFIG_COMMENT = '#';
 
 static constexpr auto INPUT_PLUGIN_FLAG = "-I";
 
@@ -98,6 +103,31 @@ public:
  */
 inline void parse(int argc, char** argv) {
   global_options = Parser(argc, argv).options();
+}
+
+// TODO(dudoslav): Implement loading of config file
+inline void load(const std::string& path) {
+  try {
+    // TODO(dudoslav): Throw exception if not opened
+    auto file = std::ifstream{path};
+
+    for (std::string line; std::getline(file, line);) {
+      if (!line.empty() && line[0] == CONFIG_COMMENT) {
+        continue;
+      }
+
+      auto eq = line.find_first_of(CONFIG_SEPARATOR);
+      if (eq == std::string::npos) {
+        continue;
+      }
+
+      // TODO(dudoslav): Trim
+      auto key = line.substr(0, eq);
+      auto value = line.substr(eq + 1, std::string::npos);
+    }
+  } catch (std::exception& e) {
+    std::cerr << e.what() << std::endl;
+  }
 }
 
 } // namespace Options

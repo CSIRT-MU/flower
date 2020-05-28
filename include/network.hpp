@@ -47,6 +47,9 @@ class Socket {
       }
     }
 
+  /**
+   * Create default streaming socket. Most probably TCP. 
+   */
   static Socket tcp() {
     return Socket{AF_INET, SOCK_STREAM, 0};
   }
@@ -69,6 +72,9 @@ class Socket {
   }
 };
 
+/**
+ * Wrapper class for all sockaddr_* structs.
+ */
 class SocketAddress {
   using SockAddrStorage = struct sockaddr_storage;
   using SockAddr = struct sockaddr;
@@ -102,18 +108,24 @@ class SocketAddress {
   }
 };
 
+/**
+ * RAII connection wrapper class. This class is used for connecting to
+ * remote server and send data. For this project writing to socket is
+ * enough.
+ */
 class Connection {
   Socket _socket;
 
-  // Construct from connected socket
-  explicit Connection(Socket&& sock):
-    _socket(std::move(sock)) {}
-
   public:
 
-  // Connect and construct
+  /**
+   * Connect provided socket to given address.
+   * @param sock socket as rvalue
+   * @param saddr socket address as destination address
+   * @throw std::system_error if failed to connect socket
+   */
   Connection(Socket&& sock, SocketAddress saddr):
-    Connection(std::move(sock)) {
+    _socket(std::move(sock)) {
     if (connect(_socket.descriptor(), saddr.sockaddr(), saddr.size()) == -1) {
       throw std::system_error{errno, std::system_category()};
     }
@@ -121,6 +133,13 @@ class Connection {
 
   ~Connection() { shutdown(_socket.descriptor(), SHUT_RDWR); }
 
+  /**
+   * Helper function for creating stream connection (most probably TCP)
+   * @see Connection::Connection();
+   * @param addr address of destination
+   * @param port port of destination
+   * @throw std::system_error if failed to connect socket
+   */
   static Connection tcp(const std::string& addr, uint16_t port) {
     return Connection{Socket::tcp(), SocketAddress::ipv4(addr, port)};
   }
@@ -140,7 +159,13 @@ class Connection {
     return *this;
   }
 
-  // Send data with given size over socket
+  /**
+   * Write into connection, since this is stream connection this should
+   * be guaranteed to arrive.
+   * @param data pointer to data block to send
+   * @param size size of data block to send
+   * @throw std::system_error if failed to send
+   */
   Connection& write(const unsigned char* data, std::size_t size) {
     // TODO(dudoslav): On EAGAIN
     if (::write(_socket.descriptor(), data, size) == -1) {

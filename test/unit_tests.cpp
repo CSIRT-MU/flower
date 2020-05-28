@@ -3,7 +3,7 @@
 #include <flow.hpp>
 
 TEST(Combine, Basic) {
-  ASSERT_NE(Flow::combine(0), 0);
+  ASSERT_EQ(Flow::combine(0), 0);
   ASSERT_EQ(Flow::combine(0), Flow::combine(0));
   ASSERT_EQ(Flow::combine(1, 2), Flow::combine(1, 2));
   ASSERT_NE(Flow::combine(1, 2), Flow::combine(2, 1));
@@ -52,6 +52,24 @@ TEST(Digest, Record) {
   r2.push_back(IP{987654321, 123456789});
 
   ASSERT_NE(digest(r1), digest(r2));
+}
+
+TEST(Combine, Associative) {
+  using namespace Flow;
+
+  auto h1 = combine(1, 2, 3, 4);
+  auto h2 = combine(1);
+  h2 = combine(h2, 2);
+  h2 = combine(h2, 3);
+  h2 = combine(h2, 4);
+
+  auto h3 = combine(1);
+  h3 = combine(2, h3);
+  h3 = combine(3, h3);
+  h3 = combine(4, h3);
+
+  ASSERT_EQ(h1, h2);
+  ASSERT_NE(h1, h3);
 }
 
 int main(int argc, char** argv) {

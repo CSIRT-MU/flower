@@ -7,8 +7,6 @@
 #include <manager.hpp>
 #include <options.hpp>
 
-#include <network.hpp>
-
 static void print_record(const Flow::Record& record) {
   for (const auto& protocol: record) {
     std::visit([](const auto& e){
@@ -88,6 +86,7 @@ static void start(Plugins::Input input) {
 
 int main(int argc, char** argv) {
   try {
+    Options::load("/home/dudoslav/.flower.conf");
     Options::parse(argc, argv);
   } catch (const std::runtime_error& e) {
     std::cerr << e.what() << std::endl;
