@@ -4,6 +4,7 @@
 
 #include <async.hpp>
 #include <flow.hpp>
+#include <ipfix.hpp>
 #include <manager.hpp>
 #include <options.hpp>
 
@@ -54,8 +55,12 @@ static Flow::Record reduce_packet(const Tins::EthernetII& packet) {
 }
 
 static void start(Plugins::Input input) {
+  auto export_interval = std::chrono::seconds{
+    stol(Options::instance().export_interval())
+  };
+
   auto cache = Flow::Cache{};
-  auto timer = Async::Timer{Options::instance().export_interval};
+  auto timer = Async::Timer{export_interval};
   timer.start([&cache](){
       std::cout << "EXPORTING:" << std::endl;
       cache.erase_if([](const auto& p){
@@ -85,32 +90,38 @@ static void start(Plugins::Input input) {
 }
 
 int main(int argc, char** argv) {
+  auto& options = Options::instance();
+
   try {
-    Options::load("/home/dudoslav/.flower.conf");
-    Options::parse(argc, argv);
+    // TODO(dudoslav): Change to be variable home
+    options.load("/home/dudoslav/.flower.conf");
+    options.parse(argc, argv);
   } catch (const std::runtime_error& e) {
     std::cerr << e.what() << std::endl;
     return 1;
   }
 
-  const auto& options = Options::instance();
-
   auto plugin_manager = Plugins::Manager{"plugins"};
 
-  switch (options.activity) {
+  switch (options.activity()) {
     case Options::Activity::LIST_PLUGINS:
       std::cout << "Input plugins:" << std::endl;
       for (const auto& p: plugin_manager.inputs()) {
-        std::cout << p.info().name << std::endl;
+        std::cout << '\t' << p.info().name << std::endl;
       }
+      break;
+    case Options::Activity::PRINT_CONFIG:
+      std::cout << "Argument: " << options.argument() << std::endl;
+      std::cout << "Input plugin: " << options.input_plugin() << std::endl;
+      std::cout << "Export interval: " << options.export_interval() << std::endl;
       break;
     case Options::Activity::SHOW_USAGE:
       std::cout << "./flower argument [options] ..." << std::endl;
       break;
     case Options::Activity::MAIN_ACTIVITY:
       try {
-        auto input = plugin_manager.create_input(options.input_name,
-            options.input_argument.c_str());
+        auto input = plugin_manager.create_input(options.input_plugin(),
+            options.argument().c_str());
         start(std::move(input));
       } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;

@@ -72,6 +72,53 @@ TEST(Combine, Associative) {
   ASSERT_NE(h1, h3);
 }
 
+TEST(Type, RecordDifferent) {
+  using namespace Flow;
+
+  auto r1 = Record{};
+  auto r2 = Record{};
+
+  r1.push_back(IP{123456789, 987654321});
+  r1.push_back(TCP{8080, 9669});
+
+  r2.push_back(TCP{9669, 8080});
+  r2.push_back(IP{987654321, 123456789});
+
+  ASSERT_NE(type(r1), type(r2));
+}
+
+TEST(Type, RecordSame) {
+  using namespace Flow;
+
+  auto r1 = Record{};
+  auto r2 = Record{};
+
+  r1.push_back(IP{123456789, 987654321});
+  r1.push_back(TCP{8080, 9669});
+
+  r2.push_back(IP{987654321, 123456789});
+  r2.push_back(TCP{9669, 8080});
+
+  ASSERT_EQ(type(r1), type(r2));
+}
+
+TEST(Type, RecordDifferentLength) {
+  using namespace Flow;
+
+  auto r1 = Record{};
+  auto r2 = Record{};
+
+  r1.push_back(IP{123456789, 987654321});
+  r1.push_back(TCP{8080, 9669});
+
+  r2.push_back(IP{987654321, 123456789});
+  r2.push_back(TCP{9669, 8080});
+  r2.push_back(TCP{9669, 8080});
+  r2.push_back(IP{987654321, 123456789});
+
+  ASSERT_NE(type(r1), type(r2));
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

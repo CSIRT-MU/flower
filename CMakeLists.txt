@@ -5,7 +5,7 @@ project(Flower)
 set(CMAKE_CXX_CLANG_TIDY
   clang-tidy
   -header-filter=.hpp
-  -checks=*,-google-runtime-references,-modernize-use-trailing-return-type,-llvm-header-guard,-fuchsia-*)
+  -checks=*,-google-runtime-references,-modernize-use-trailing-return-type,-llvm-header-guard,-fuchsia-*,-misc-non-private-member-variables-in-classes)
 
 find_package(Threads)
 find_package(libtins)

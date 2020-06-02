@@ -7,13 +7,6 @@ set_tests_properties(Usage
   PROPERTIES PASS_REGULAR_EXPRESSION "./flower .*"
   )
 
-add_test(NAME Plugins
-  COMMAND flower --list-plugins
-  WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
-set_tests_properties(Plugins
-  PROPERTIES PASS_REGULAR_EXPRESSION ".*InterfaceInput.*FileInput.*"
-  )
-
 find_package(GTest REQUIRED)
 
 unset(CMAKE_CXX_CLANG_TIDY)

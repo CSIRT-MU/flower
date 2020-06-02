@@ -167,10 +167,22 @@ class Connection {
    * @throw std::system_error if failed to send
    */
   Connection& write(const unsigned char* data, std::size_t size) {
-    // TODO(dudoslav): On EAGAIN
-    if (::write(_socket.descriptor(), data, size) == -1) {
-      throw std::system_error{errno, std::system_category()};
+    auto sent = std::size_t{0};
+
+    for (int n = 0;
+        sent < size;
+        n = send(_socket.descriptor(),
+          data + sent, // NOLINT: Pointer arithmetics are required
+          size - sent, 0)) {
+      if (n == -1) {
+        if (errno == EAGAIN) {
+          continue;
+        }
+        throw std::system_error{errno, std::system_category()};
+      }
+      sent += n;
     }
+
     return *this;
   }
 };
