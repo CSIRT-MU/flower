@@ -42,7 +42,7 @@ public:
     SharedObject(file.c_str()) {}
 
   // TODO(dudoslav): Find if virtual is necessary
-  virtual ~SharedObject() {
+  virtual ~SharedObject() noexcept {
     if (handle != nullptr) {
       dlclose(handle);
     }

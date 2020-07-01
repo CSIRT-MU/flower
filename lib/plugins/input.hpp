@@ -60,7 +60,7 @@ public:
     return *this;
   }
 
-  ~Input() {
+  ~Input() noexcept {
     if (_finalize != nullptr) {
       _finalize();
     }

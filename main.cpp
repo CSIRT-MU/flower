@@ -59,18 +59,27 @@ static void start(Plugins::Input input) {
     stol(Options::instance().export_interval())
   };
 
+  auto conn = Net::Connection::tcp("127.0.0.1", 20000);
+  auto exporter = IPFIX::Exporter{};
   auto cache = Flow::Cache{};
   auto timer = Async::Timer{export_interval};
-  timer.start([&cache](){
+  timer.start([&cache, &exporter, &conn](){
       std::cout << "EXPORTING:" << std::endl;
-      cache.erase_if([](const auto& p){
+      cache.erase_if([&exporter](const auto& p){
           auto& props = p.second.first;
           std::cout << "COUNT: " << props.count;
           std::cout << " FIRST: " << props.first_timestamp;
           std::cout << " LAST: " << props.last_timestamp << std::endl;
           print_record(p.second.second);
+          exporter.insert(p.second.second);
           return true;
           });
+
+      exporter.for_each_buffer([&conn](const auto& buffer){
+          conn.write(buffer.data(), buffer.size());
+          });
+
+      exporter.clear();
       });
 
   for (;;) {
@@ -97,7 +106,7 @@ int main(int argc, char** argv) {
     options.load("/home/dudoslav/.flower.conf");
     options.parse(argc, argv);
   } catch (const std::runtime_error& e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     return 1;
   }
 

@@ -1,9 +1,13 @@
 #pragma once
 
+#include <cstring>
 #include <initializer_list>
 #include <numeric>
+#include <span>
 #include <variant>
 #include <vector>
+
+#include <arpa/inet.h>
 
 namespace Flow {
 
@@ -44,6 +48,25 @@ struct IP {
   [[nodiscard]] static Type type() {
     return Type::IP;
   }
+
+  [[nodiscard]] std::vector<std::byte> values() const {
+    auto nsrc = htonl(src);
+    auto ndst = htonl(dst);
+    auto result = std::vector<std::byte>(sizeof(nsrc) + sizeof(ndst));
+    std::memcpy(result.data(), &nsrc, sizeof(nsrc));
+    std::memcpy(result.data() + sizeof(nsrc), &ndst, sizeof(ndst));
+
+    return result;
+  }
+
+  [[nodiscard]] static std::vector<std::byte> fields() {
+    // TODO(dudoslav): Remove magic numbers
+    // https://www.iana.org/assignments/ipfix/ipfix.xhtml
+    static const auto t = std::array{htons(8), htons(4), htons(12), htons(4)};
+    auto s = std::as_bytes(std::span{t});
+
+    return {s.begin(), s.end()};
+  }
 };
 
 struct TCP {
@@ -56,6 +79,23 @@ struct TCP {
 
   [[nodiscard]] static Type type() {
     return Type::TCP;
+  }
+
+  [[nodiscard]] std::vector<std::byte> values() const {
+    auto nsrc = htons(src);
+    auto ndst = htons(dst);
+    auto result = std::vector<std::byte>(sizeof(nsrc) + sizeof(ndst));
+    std::memcpy(result.data(), &nsrc, sizeof(nsrc));
+    std::memcpy(result.data() + sizeof(nsrc), &ndst, sizeof(ndst));
+
+    return result;
+  }
+
+  [[nodiscard]] static std::vector<std::byte> fields() {
+    static const auto t = std::array{htons(7), htons(2), htons(11), htons(2)};
+    auto s = std::as_bytes(std::span{t});
+
+    return {s.begin(), s.end()};
   }
 };
 
@@ -70,6 +110,23 @@ struct UDP {
   [[nodiscard]] static Type type() {
     return Type::UDP;
   }
+
+  [[nodiscard]] std::vector<std::byte> values() const {
+    auto nsrc = htons(src);
+    auto ndst = htons(dst);
+    auto result = std::vector<std::byte>(sizeof(nsrc) + sizeof(ndst));
+    std::memcpy(result.data(), &nsrc, sizeof(nsrc));
+    std::memcpy(result.data() + sizeof(nsrc), &ndst, sizeof(ndst));
+
+    return result;
+  }
+
+  [[nodiscard]] static std::vector<std::byte> fields() {
+    static const auto t = std::array{htons(7), htons(2), htons(11), htons(2)};
+    auto s = std::as_bytes(std::span{t});
+
+    return {s.begin(), s.end()};
+  }
 };
 
 struct DOT1Q {
@@ -81,6 +138,21 @@ struct DOT1Q {
 
   [[nodiscard]] static Type type() {
     return Type::DOT1Q;
+  }
+
+  [[nodiscard]] std::vector<std::byte> values() const {
+    auto nid = htons(id);
+    auto result = std::vector<std::byte>(sizeof(nid));
+    std::memcpy(result.data(), &nid, sizeof(nid));
+
+    return result;
+  }
+
+  [[nodiscard]] static std::vector<std::byte> fields() {
+    static const auto t = std::array{htons(58), htons(2)};
+    auto s = std::as_bytes(std::span{t});
+
+    return {s.begin(), s.end()};
   }
 };
 
@@ -94,6 +166,14 @@ inline std::size_t digest(const Protocol& protocol) {
 inline std::size_t type(const Protocol& protocol) {
   return static_cast<std::size_t>(
       std::visit([](const auto& v){ return v.type(); }, protocol));
+}
+
+inline std::vector<std::byte> values(const Protocol& protocol) {
+  return std::visit([](const auto& v){ return v.values(); }, protocol);
+}
+
+inline std::vector<std::byte> fields(const Protocol& protocol) {
+  return std::visit([](const auto& v){ return v.fields(); }, protocol);
 }
 
 // TODO(dudoslav): Handle if record is empty
@@ -110,6 +190,28 @@ inline std::size_t type(const Record& record) {
       type(record.front()), [](std::size_t acc, const Protocol& p){
       return combine(acc, type(p));
       });
+}
+
+inline std::vector<std::byte> values(const Record& record) {
+  auto result = std::vector<std::byte>{};
+
+  for (const auto& p: record) {
+    auto v = values(p);
+    result.insert(result.end(), v.cbegin(), v.cend());
+  }
+
+  return result;
+}
+
+inline std::vector<std::byte> fields(const Record& record) {
+  auto result = std::vector<std::byte>{};
+
+  for (const auto& p: record) {
+    auto f = fields(p);
+    result.insert(result.end(), f.cbegin(), f.cend());
+  }
+
+  return result;
 }
 
 } // namespace Flow

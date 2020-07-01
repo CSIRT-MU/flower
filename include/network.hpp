@@ -51,10 +51,10 @@ class Socket {
    * Create default streaming socket. Most probably TCP. 
    */
   static Socket tcp() {
-    return Socket{AF_INET, SOCK_STREAM, 0};
+    return Socket{PF_INET, SOCK_STREAM, 0};
   }
 
-  ~Socket() { if (_handle != -1) { close(_handle); } }
+  ~Socket() noexcept { if (_handle != -1) { close(_handle); } }
 
   // Copy
   Socket(const Socket&) = delete;
@@ -85,12 +85,12 @@ class SocketAddress {
   public:
 
   explicit SocketAddress(SockAddrIn saddr) {
-    memcpy(&_saddr, &saddr, sizeof(saddr));
+    std::memcpy(&_saddr, &saddr, sizeof(saddr));
   }
 
   static SocketAddress ipv4(const std::string& addr, uint16_t port) {
     auto saddr = SockAddrIn{};
-    saddr.sin_addr.s_addr = inet_addr(addr.c_str());
+    inet_pton(AF_INET, addr.c_str(), &saddr.sin_addr);
     saddr.sin_family = AF_INET;
     saddr.sin_port = htons(port);
 
@@ -131,7 +131,7 @@ class Connection {
     }
   }
 
-  ~Connection() { shutdown(_socket.descriptor(), SHUT_RDWR); }
+  ~Connection() noexcept { shutdown(_socket.descriptor(), SHUT_RDWR); }
 
   /**
    * Helper function for creating stream connection (most probably TCP)
@@ -166,7 +166,7 @@ class Connection {
    * @param size size of data block to send
    * @throw std::system_error if failed to send
    */
-  Connection& write(const unsigned char* data, std::size_t size) {
+  Connection& write(const std::byte* data, std::size_t size) {
     auto sent = std::size_t{0};
 
     for (int n = 0;
