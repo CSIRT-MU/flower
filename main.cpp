@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <iostream>
 
 #include <tins/tins.h>
@@ -55,13 +56,20 @@ static Flow::Record reduce_packet(const Tins::EthernetII& packet) {
 }
 
 static void start(Plugins::Input input) {
+  auto options = Options::instance();
+
   auto export_interval = std::chrono::seconds{
-    stol(Options::instance().export_interval())
+    std::stol(options.export_interval())
   };
 
-  auto conn = Net::Connection::tcp("127.0.0.1", 20000);
+  std::cout << "Connecting to: " << options.output_ip_address() << '\n';
+  std::cout << "with port: " << options.output_port() << '\n';
+
+  auto conn = Net::Connection::tcp(options.output_ip_address(),
+      options.output_port());
   auto exporter = IPFIX::Exporter{};
   auto cache = Flow::Cache{};
+
   auto timer = Async::Timer{export_interval};
   timer.start([&cache, &exporter, &conn](){
       std::cout << "EXPORTING:" << std::endl;
@@ -100,10 +108,13 @@ static void start(Plugins::Input input) {
 
 int main(int argc, char** argv) {
   auto& options = Options::instance();
+  const auto* home = std::getenv("HOME");
 
   try {
     // TODO(dudoslav): Change to be variable home
-    options.load("/home/dudoslav/.flower.conf");
+    if (home != nullptr) {
+      options.load(std::string{home} + "/.flower.conf");
+    }
     options.parse(argc, argv);
   } catch (const std::runtime_error& e) {
     std::cerr << e.what() << '\n';

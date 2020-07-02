@@ -18,6 +18,8 @@ private:
   // Options can be set both in command line arguments and in config file
   static constexpr auto INPUT_PLUGIN_OPTION = "input_plugin";
   static constexpr auto INPUT_PLUGIN_FLAG = "I";
+  static constexpr auto OUTPUT_IP_ADDRESS_OPTION = "ip_address";
+  static constexpr auto OUTPUT_PORT_OPTION = "port";
 
   static constexpr auto EXPORT_INTERVAL_OPTION = "export_interval";
 
@@ -30,6 +32,8 @@ private:
 
   std::string _input_plugin = "FileInput";
   std::string _export_interval = "120";
+  std::string _output_ip_address = "127.0.0.1";
+  std::string _output_port = "20000";
 
   Options() = default;
 
@@ -56,6 +60,14 @@ public:
     return _export_interval;
   }
 
+  [[nodiscard]] const std::string& output_ip_address() const {
+    return _output_ip_address;
+  }
+
+  [[nodiscard]] uint16_t output_port() const {
+    return std::stoi(_output_port);
+  }
+
   void parse(int argc, char** argv) {
     auto args = std::vector<std::string>{argv + 1, argv + argc}; // NOLINT: Pointer arithmetics are fine here
 
@@ -68,6 +80,10 @@ public:
           _input_plugin = *(++arg);
         } else if (option == EXPORT_INTERVAL_OPTION) {
           _export_interval = *(++arg);
+        } else if (option == OUTPUT_IP_ADDRESS_OPTION) {
+          _output_ip_address = *(++arg);
+        } else if (option == OUTPUT_PORT_OPTION) {
+          _output_port = *(++arg);
         } else if (option == LIST_PLUGINS_ACTION) {
           _activity = Activity::LIST_PLUGINS;
         } else if (option == PRINT_CONFIG_ACTION) {
@@ -106,6 +122,10 @@ public:
         _input_plugin = value;
       } else if (key == EXPORT_INTERVAL_OPTION) {
         _export_interval = value;
+      } else if (key == OUTPUT_IP_ADDRESS_OPTION) {
+        _output_ip_address = value;
+      } else if (key == OUTPUT_PORT_OPTION) {
+        _output_port = value;
       }
     }
   }
