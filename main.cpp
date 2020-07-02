@@ -72,7 +72,7 @@ static void start(Plugins::Input input) {
 
   auto timer = Async::Timer{export_interval};
   timer.start([&cache, &exporter, &conn](){
-      std::cout << "EXPORTING:" << std::endl;
+      std::cout << "EXPORTING..." << std::endl;
       cache.erase_if([&exporter](const auto& p){
           auto& props = p.second.first;
           std::cout << "COUNT: " << props.count;
@@ -111,7 +111,6 @@ int main(int argc, char** argv) {
   const auto* home = std::getenv("HOME");
 
   try {
-    // TODO(dudoslav): Change to be variable home
     if (home != nullptr) {
       options.load(std::string{home} + "/.flower.conf");
     }
@@ -131,9 +130,11 @@ int main(int argc, char** argv) {
       }
       break;
     case Options::Activity::PRINT_CONFIG:
-      std::cout << "Argument: " << options.argument() << std::endl;
-      std::cout << "Input plugin: " << options.input_plugin() << std::endl;
-      std::cout << "Export interval: " << options.export_interval() << std::endl;
+      std::cout << "Argument: " << options.argument() << '\n';
+      std::cout << "Input plugin: " << options.input_plugin() << '\n';
+      std::cout << "Export interval: " << options.export_interval() << '\n';
+      std::cout << "Ip address: " << options.output_ip_address() << '\n';
+      std::cout << "Port: " << options.output_port() << '\n';
       break;
     case Options::Activity::SHOW_USAGE:
       std::cout << "./flower argument [options] ..." << std::endl;

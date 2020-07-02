@@ -11,6 +11,8 @@
 namespace IPFIX {
 
 static constexpr auto VERSION = uint16_t{0x000a};
+static constexpr auto USER_TEMPLATES = 256;
+static constexpr auto TEMPLATE_ID = 2;
 
 struct [[gnu::packed]] MessageHeader {
   uint16_t version;
@@ -35,8 +37,7 @@ struct [[gnu::packed]] TemplateHeader {
 class Exporter {
   using TemplateEntry = std::pair<uint16_t, std::vector<std::byte>>;
 
-  // TODO(dudoslav): Remove magic number
-  std::size_t _last_template{256};
+  std::size_t _last_template{USER_TEMPLATES};
 
   std::unordered_map<std::size_t, TemplateEntry> _templates;
   std::unordered_map<std::size_t, std::vector<std::byte>> _records;
@@ -49,7 +50,6 @@ class Exporter {
 
     auto search = _templates.find(type);
     if (search == _templates.end()) {
-      // TODO(dudoslav): Create template
       auto t = fields(record);
       _templates.emplace(type,
           std::make_pair(_last_template, std::move(t)));
@@ -75,7 +75,7 @@ class Exporter {
       auto t = _templates[r.first]; // TODO(dudoslav): If exists
 
       auto th = TemplateHeader{};
-      th.id = htons(2); // TODO(dudoslav): Remove magic number
+      th.id = htons(TEMPLATE_ID);
       th.length = htons(sizeof(th) + t.second.size());
       th.template_id = htons(t.first);
       th.field_count = htons(t.second.size() / 4);

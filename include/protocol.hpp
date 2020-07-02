@@ -11,6 +11,16 @@
 
 namespace Flow {
 
+static constexpr auto IPFIX_SHORT = 2;
+static constexpr auto IPFIX_LONG = 4;
+
+// https://www.iana.org/assignments/ipfix/ipfix.xhtml
+static constexpr auto IPFIX_SRC_IP4_ADDR = 8;
+static constexpr auto IPFIX_DST_IP4_ADDR = 12;
+static constexpr auto IPFIX_SRC_PORT = 7;
+static constexpr auto IPFIX_DST_PORT = 11;
+static constexpr auto IPFIX_VLAN_ID = 58;
+
 /**
  * Hash function of arbitrary arity. This function MUST BE non commutative.
  * @param args numbers to reduce to one hash
@@ -60,9 +70,12 @@ struct IP {
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
-    // TODO(dudoslav): Remove magic numbers
-    // https://www.iana.org/assignments/ipfix/ipfix.xhtml
-    static const auto t = std::array{htons(8), htons(4), htons(12), htons(4)};
+    static const auto t = std::array{
+      htons(IPFIX_SRC_IP4_ADDR),
+      htons(IPFIX_LONG),
+      htons(IPFIX_DST_IP4_ADDR),
+      htons(IPFIX_LONG)
+    };
     auto s = std::as_bytes(std::span{t});
 
     return {s.begin(), s.end()};
@@ -92,7 +105,12 @@ struct TCP {
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
-    static const auto t = std::array{htons(7), htons(2), htons(11), htons(2)};
+    static const auto t = std::array{
+      htons(IPFIX_SRC_PORT),
+      htons(IPFIX_SHORT),
+      htons(IPFIX_DST_PORT),
+      htons(IPFIX_SHORT)
+    };
     auto s = std::as_bytes(std::span{t});
 
     return {s.begin(), s.end()};
@@ -122,7 +140,12 @@ struct UDP {
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
-    static const auto t = std::array{htons(7), htons(2), htons(11), htons(2)};
+    static const auto t = std::array{
+      htons(IPFIX_SRC_PORT),
+      htons(IPFIX_SHORT),
+      htons(IPFIX_DST_PORT),
+      htons(IPFIX_SHORT)
+    };
     auto s = std::as_bytes(std::span{t});
 
     return {s.begin(), s.end()};
@@ -149,7 +172,10 @@ struct DOT1Q {
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
-    static const auto t = std::array{htons(58), htons(2)};
+    static const auto t = std::array{
+      htons(IPFIX_VLAN_ID),
+      htons(IPFIX_SHORT)
+    };
     auto s = std::as_bytes(std::span{t});
 
     return {s.begin(), s.end()};
