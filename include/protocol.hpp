@@ -16,11 +16,17 @@ static constexpr auto IPFIX_LONG = 4;
 
 // https://www.iana.org/assignments/ipfix/ipfix.xhtml
 static constexpr auto IPFIX_PACKET_DELTA_COUNT = 2;
+static constexpr auto IPFIX_PROTOCOL_IDENTIFIER = 4;
 static constexpr auto IPFIX_SRC_IP4_ADDR = 8;
 static constexpr auto IPFIX_DST_IP4_ADDR = 12;
 static constexpr auto IPFIX_SRC_PORT = 7;
 static constexpr auto IPFIX_DST_PORT = 11;
 static constexpr auto IPFIX_VLAN_ID = 58;
+
+static constexpr auto IPFIX_PROTOCOL_IP = 4;
+static constexpr auto IPFIX_PROTOCOL_TCP = 6;
+static constexpr auto IPFIX_PROTOCOL_UDP = 17;
+static constexpr auto IPFIX_PROTOCOL_DOT1Q = 144; // TODO(dudoslav): Change
 
 /**
  * Hash function of arbitrary arity. This function MUST BE non commutative.
@@ -41,11 +47,12 @@ constexpr std::size_t combine(std::size_t f, N... n) {
       });
 }
 
+// https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
 enum class Type: unsigned long {
-  IP,
-  TCP,
-  UDP,
-  DOT1Q
+  IP = IPFIX_PROTOCOL_IP,
+  TCP = IPFIX_PROTOCOL_TCP,
+  UDP = IPFIX_PROTOCOL_UDP,
+  DOT1Q = IPFIX_PROTOCOL_DOT1Q
 };
 
 struct IP {
@@ -61,13 +68,18 @@ struct IP {
   }
 
   [[nodiscard]] std::vector<std::byte> values() const {
-    auto nsrc = htonl(src);
-    auto ndst = htonl(dst);
-    auto result = std::vector<std::byte>(sizeof(nsrc) + sizeof(ndst));
-    std::memcpy(result.data(), &nsrc, sizeof(nsrc));
-    std::memcpy(result.data() + sizeof(nsrc), &ndst, sizeof(ndst));
+    struct [[gnu::packed]] {
+      uint32_t src;
+      uint32_t dst;
+      uint16_t protocol;
+    } v = {};
+    v.src = src; // TODO(dudoslav): Doesn't need htonl, why?
+    v.dst = dst;
+    v.protocol = htons(IPFIX_PROTOCOL_IP);
 
-    return result;
+    auto bv = std::as_bytes(std::span{&v, 1});
+
+    return {bv.begin(), bv.end()};
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
@@ -75,7 +87,9 @@ struct IP {
       htons(IPFIX_SRC_IP4_ADDR),
       htons(IPFIX_LONG),
       htons(IPFIX_DST_IP4_ADDR),
-      htons(IPFIX_LONG)
+      htons(IPFIX_LONG),
+      htons(IPFIX_PROTOCOL_IDENTIFIER),
+      htons(IPFIX_SHORT)
     };
     auto s = std::as_bytes(std::span{t});
 
@@ -96,13 +110,18 @@ struct TCP {
   }
 
   [[nodiscard]] std::vector<std::byte> values() const {
-    auto nsrc = htons(src);
-    auto ndst = htons(dst);
-    auto result = std::vector<std::byte>(sizeof(nsrc) + sizeof(ndst));
-    std::memcpy(result.data(), &nsrc, sizeof(nsrc));
-    std::memcpy(result.data() + sizeof(nsrc), &ndst, sizeof(ndst));
+    struct [[gnu::packed]] {
+      uint16_t src;
+      uint16_t dst;
+      uint16_t protocol;
+    } v = {};
+    v.src = htons(src);
+    v.dst = htons(dst);
+    v.protocol = htons(IPFIX_PROTOCOL_TCP);
 
-    return result;
+    auto bv = std::as_bytes(std::span{&v, 1});
+
+    return {bv.begin(), bv.end()};
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
@@ -110,6 +129,8 @@ struct TCP {
       htons(IPFIX_SRC_PORT),
       htons(IPFIX_SHORT),
       htons(IPFIX_DST_PORT),
+      htons(IPFIX_SHORT),
+      htons(IPFIX_PROTOCOL_IDENTIFIER),
       htons(IPFIX_SHORT)
     };
     auto s = std::as_bytes(std::span{t});
@@ -131,13 +152,18 @@ struct UDP {
   }
 
   [[nodiscard]] std::vector<std::byte> values() const {
-    auto nsrc = htons(src);
-    auto ndst = htons(dst);
-    auto result = std::vector<std::byte>(sizeof(nsrc) + sizeof(ndst));
-    std::memcpy(result.data(), &nsrc, sizeof(nsrc));
-    std::memcpy(result.data() + sizeof(nsrc), &ndst, sizeof(ndst));
+    struct [[gnu::packed]] {
+      uint16_t src;
+      uint16_t dst;
+      uint16_t protocol;
+    } v = {};
+    v.src = htons(src);
+    v.dst = htons(dst);
+    v.protocol = htons(IPFIX_PROTOCOL_UDP);
 
-    return result;
+    auto bv = std::as_bytes(std::span{&v, 1});
+
+    return {bv.begin(), bv.end()};
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
@@ -145,6 +171,8 @@ struct UDP {
       htons(IPFIX_SRC_PORT),
       htons(IPFIX_SHORT),
       htons(IPFIX_DST_PORT),
+      htons(IPFIX_SHORT),
+      htons(IPFIX_PROTOCOL_IDENTIFIER),
       htons(IPFIX_SHORT)
     };
     auto s = std::as_bytes(std::span{t});
@@ -165,16 +193,23 @@ struct DOT1Q {
   }
 
   [[nodiscard]] std::vector<std::byte> values() const {
-    auto nid = htons(id);
-    auto result = std::vector<std::byte>(sizeof(nid));
-    std::memcpy(result.data(), &nid, sizeof(nid));
+    struct [[gnu::packed]] {
+      uint16_t id;
+      uint16_t protocol;
+    } v = {};
+    v.id = htons(id);
+    v.protocol = htons(IPFIX_PROTOCOL_DOT1Q);
 
-    return result;
+    auto bv = std::as_bytes(std::span{&v, 1});
+
+    return {bv.begin(), bv.end()};
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
     static const auto t = std::array{
       htons(IPFIX_VLAN_ID),
+      htons(IPFIX_SHORT),
+      htons(IPFIX_PROTOCOL_IDENTIFIER),
       htons(IPFIX_SHORT)
     };
     auto s = std::as_bytes(std::span{t});
