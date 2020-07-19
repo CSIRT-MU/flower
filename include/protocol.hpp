@@ -15,6 +15,7 @@ static constexpr auto IPFIX_SHORT = 2;
 static constexpr auto IPFIX_LONG = 4;
 
 // https://www.iana.org/assignments/ipfix/ipfix.xhtml
+static constexpr auto IPFIX_PACKET_DELTA_COUNT = 2;
 static constexpr auto IPFIX_SRC_IP4_ADDR = 8;
 static constexpr auto IPFIX_DST_IP4_ADDR = 12;
 static constexpr auto IPFIX_SRC_PORT = 7;

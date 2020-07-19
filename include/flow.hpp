@@ -7,6 +7,21 @@
 #include <protocol.hpp>
 
 namespace Flow {
+
+/**
+ * Metadata used in stroring flow records.
+ */
+struct Properties {
+  std::size_t count;
+  unsigned int first_timestamp;
+  unsigned int last_timestamp;
+};
+
+/**
+ * Type used to store record with some metadata.
+ */
+using Entry = std::pair<Properties, Record>;
+
 /**
  * Flow cache is used to store flow data during program
  * execution. It needs to be fast and it holds relatively
@@ -15,14 +30,6 @@ namespace Flow {
  * exporting data.
  */
 class Cache {
-  struct Properties {
-    std::size_t count;
-    unsigned int first_timestamp;
-    unsigned int last_timestamp;
-  };
-
-  using Entry = std::pair<Properties, Record>;
-
   std::unordered_map<std::size_t, Entry> _records;
   mutable std::mutex _mutex;
 

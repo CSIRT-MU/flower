@@ -79,7 +79,7 @@ static void start(Plugins::Input input) {
           std::cout << " FIRST: " << props.first_timestamp;
           std::cout << " LAST: " << props.last_timestamp << std::endl;
           print_record(p.second.second);
-          exporter.insert(p.second.second);
+          exporter.insert(p.second);
           return true;
           });
 

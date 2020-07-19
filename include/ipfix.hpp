@@ -5,6 +5,7 @@
 
 #include <arpa/inet.h>
 
+#include <flow.hpp>
 #include <network.hpp>
 #include <protocol.hpp>
 
@@ -34,10 +35,45 @@ struct [[gnu::packed]] TemplateHeader {
   uint16_t field_count;
 };
 
+inline std::vector<std::byte> values(const Flow::Properties& props) {
+  auto ncount = htonl(props.count);
+  auto result = std::vector<std::byte>(sizeof(ncount));
+  std::memcpy(result.data(), &ncount, sizeof(ncount));
+
+  return result;
+}
+
+inline std::vector<std::byte> fields([[maybe_unused]] const Flow::Properties& props) {
+  static const auto t = std::array{
+    htons(Flow::IPFIX_PACKET_DELTA_COUNT),
+    htons(Flow::IPFIX_LONG)
+  };
+  auto s = std::as_bytes(std::span{t});
+
+  return {s.begin(), s.end()};
+}
+
+inline std::vector<std::byte> values(const Flow::Entry& entry) {
+  auto result = values(entry.first);
+  auto v = values(entry.second);
+  result.insert(result.end(), v.cbegin(), v.cend());
+
+  return result;
+}
+
+inline std::vector<std::byte> fields(const Flow::Entry& entry) {
+  auto result = fields(entry.first);
+  auto f = fields(entry.second);
+  result.insert(result.end(), f.cbegin(), f.cend());
+
+  return result;
+}
+
 class Exporter {
   using TemplateEntry = std::pair<uint16_t, std::vector<std::byte>>;
 
   std::size_t _last_template{USER_TEMPLATES};
+  std::size_t _sequence_num{0};
 
   std::unordered_map<std::size_t, TemplateEntry> _templates;
   std::unordered_map<std::size_t, std::vector<std::byte>> _records;
@@ -45,12 +81,12 @@ class Exporter {
   public:
 
   template<typename T>
-  void insert(T&& record) {
-    const auto type = Flow::type(record);
+  void insert(T&& cache_entry) {
+    const auto type = Flow::type(cache_entry.second);
 
     auto search = _templates.find(type);
     if (search == _templates.end()) {
-      auto t = fields(record);
+      auto t = fields(cache_entry);
       _templates.emplace(type,
           std::make_pair(_last_template, std::move(t)));
       ++_last_template;
@@ -58,7 +94,7 @@ class Exporter {
 
     // TODO(dudoslav): Buffer cannot exceed MTL
     auto& buffer = _records[type];
-    auto v = values(record);
+    auto v = values(cache_entry);
     buffer.insert(buffer.end(), v.begin(), v.end());
   }
 
@@ -97,8 +133,8 @@ class Exporter {
       auto mh = MessageHeader{};
       mh.version = htons(VERSION);
       mh.length = htons(buffer.size());
-      mh.timestamp = 0; // TODO(dudoslav): Fill and htonl
-      mh.sequence_num = 0;
+      mh.timestamp = htonl(std::time(nullptr));
+      mh.sequence_num = htonl(++_sequence_num);
       mh.domain_num = 0;
 
       auto bmh = std::as_bytes(std::span{&mh, 1});
