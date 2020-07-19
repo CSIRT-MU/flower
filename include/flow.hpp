@@ -9,8 +9,10 @@
 namespace Flow {
 /**
  * Flow cache is used to store flow data during program
- * execution. It needs to be fast and it host relatively
- * large amount of data.
+ * execution. It needs to be fast and it holds relatively
+ * large amount of data. Also, it needs to be thread safe,
+ * since one thread is inserting data and another is
+ * exporting data.
  */
 class Cache {
   struct Properties {
@@ -26,6 +28,11 @@ class Cache {
 
 public:
 
+  /**
+   * Method that inserts record into flow cache
+   * @param record record to insert into flow cache
+   * @param timestamp timestamp of captured record
+   */
   template<typename T>
   void insert(T&& record, unsigned int timestamp) {
     auto key = digest(record);
@@ -48,6 +55,11 @@ public:
     }
   }
 
+  /**
+   * Higher order method used to iterate over entries in no
+   * particular order.
+   * @param fun callable that will be called for each entry
+   */
   template<typename Fun>
   void for_each(Fun&& fun) const {
     const auto lock = std::lock_guard{_mutex};
@@ -56,6 +68,12 @@ public:
         std::forward<Fun>(fun));
   }
 
+  /**
+   * Higher order method used to iterate and delete elements in
+   * flow cache.
+   * @param fun callable that must return true/false if element
+   *   should be deleted
+   */
   template<typename Fun>
   void erase_if(Fun&& fun) {
     const auto lock = std::lock_guard{_mutex};
@@ -63,6 +81,10 @@ public:
     std::erase_if(_records, std::forward<Fun>(fun));
   }
 
+  /**
+   * Simple getter for all records.
+   * @return map of all record entries
+   */
   const auto& records() const {
     return _records;
   }
