@@ -20,9 +20,20 @@ Where interface can be for example `wlp3s0`. Flower also has other options, such
 
 Also, Flower can print all input plug-ins using flag `--list_plugins`. If you
 prefer configuration from a file Flower reads its configuration file from
-standard locations:
+standard locations. By default flower will try to open configuration file at
+`~/.flower.conf`. The configuration file can look as follows:
 
-TODO: Add standard locations
+```
+# Flower config file
+# Format:
+# Key=Value
+
+# Export interval
+export_interval=600
+
+ip_address=127.0.0.1
+port=20000
+```
 
 ## Installation
 

@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
       std::cout << "Port: " << options.output_port() << '\n';
       break;
     case Options::Activity::SHOW_USAGE:
-      std::cout << "./flower argument [options] ..." << std::endl;
+      std::cout << USAGE_STRING << std::endl;
       break;
     case Options::Activity::MAIN_ACTIVITY:
       try {

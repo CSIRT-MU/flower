@@ -5,6 +5,24 @@
 #include <tuple>
 #include <vector>
 
+constexpr auto USAGE_STRING = R"(
+Usage: ./flower argument [options | actions] ...
+
+Argument is used by the input plugin.
+
+Options:
+  -I, --input_plugin
+  --ip_address
+  --port
+  --export_interval
+
+All options can be also set in configuration file `~/.flower.conf`.
+
+Actions:
+  --list_plugins
+  --print_config
+)";
+
 struct Options {
   enum class Activity { LIST_PLUGINS, SHOW_USAGE, MAIN_ACTIVITY, PRINT_CONFIG };
 
