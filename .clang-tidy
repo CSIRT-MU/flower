@@ -1,0 +1,4 @@
+---
+Checks: '*,-google-runtime-references,-modernize-use-trailing-return-type,-llvm-header-guard,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-pro-bounds-pointer-arithmetic'
+HeaderFilterRegex: '.hpp'
+FormatStyle: none

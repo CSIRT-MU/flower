@@ -1,16 +1,14 @@
 #include <pcap.h>
 
-#include "provider.hpp"
-
-extern "C" {
+#include <input.h>
 
 pcap_t* handle;
 char errbuf[PCAP_ERRBUF_SIZE];
 
-PluginInfo info() {
-  PluginInfo result;
-  result.type = PluginType::PacketProvider;
-  result.name = "FilePacketProvider";
+struct PluginInfo info() {
+  struct PluginInfo result;
+  result.type = INPUT_PLUGIN;
+  result.name = "FileInput";
   return result;
 }
 
@@ -22,10 +20,10 @@ void finalize() {
   pcap_close(handle);
 }
 
-Packet get_packet() {
+struct Packet get_packet() {
   struct pcap_pkthdr header;
   const u_char* data = pcap_next(handle, &header);
-  Packet result;
+  struct Packet result;
   result.data = data;
 
   if (!data) return result;
@@ -35,6 +33,3 @@ Packet get_packet() {
 
   return result;
 }
-
-}
-

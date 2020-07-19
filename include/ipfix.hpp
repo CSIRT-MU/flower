@@ -1,21 +1,21 @@
 #pragma once
 
+#include <cstddef>
 #include <unordered_map>
-#include <ctime>
 
-#include <tins/tins.h>
+#include <arpa/inet.h>
 
-#include "network.hpp"
-#include "flow.hpp"
+#include <flow.hpp>
+#include <network.hpp>
+#include <protocol.hpp>
 
 namespace IPFIX {
 
 static constexpr auto VERSION = uint16_t{0x000a};
-static constexpr auto BUFFER_SIZE = std::size_t{1024};
+static constexpr auto USER_TEMPLATES = 256;
+static constexpr auto TEMPLATE_ID = 2;
 
-#pragma pack(push)
-#pragma pack(1)
-struct MessageHeader {
+struct [[gnu::packed]] MessageHeader {
   uint16_t version;
   uint16_t length;
   uint32_t timestamp;
@@ -23,128 +23,125 @@ struct MessageHeader {
   uint32_t domain_num;
 };
 
-struct RecordHeader {
+struct [[gnu::packed]] RecordHeader {
   uint16_t template_id;
   uint16_t length;
 };
 
-struct TemplateHeader {
+struct [[gnu::packed]] TemplateHeader {
   uint16_t id;
   uint16_t length;
   uint16_t template_id;
   uint16_t field_count;
 };
-#pragma pack(pop)
 
-template<std::size_t N>
-class Buffer {
-  static constexpr auto CAPACITY = std::size_t{N};
+inline std::vector<std::byte> values(const Flow::Properties& props) {
+  auto ncount = htonl(props.count);
+  auto result = std::vector<std::byte>(sizeof(ncount));
+  std::memcpy(result.data(), &ncount, sizeof(ncount));
 
-  uint8_t buffer[CAPACITY];
-  uint8_t* const begin = buffer + sizeof(MessageHeader);
-  uint8_t* pos = begin;
+  return result;
+}
 
-  public:
+inline std::vector<std::byte> fields([[maybe_unused]] const Flow::Properties& props) {
+  static const auto t = std::array{
+    htons(Flow::IPFIX_PACKET_DELTA_COUNT),
+    htons(Flow::IPFIX_LONG)
+  };
+  auto s = std::as_bytes(std::span{t});
 
-  MessageHeader* const msg_header = reinterpret_cast<MessageHeader*>(buffer);
+  return {s.begin(), s.end()};
+}
 
-  Buffer() { reset(); }
+inline std::vector<std::byte> values(const Flow::Entry& entry) {
+  auto result = values(entry.first);
+  auto v = values(entry.second);
+  result.insert(result.end(), v.cbegin(), v.cend());
 
-  template<typename T>
-  T* push(std::size_t size) {
-    T* result = reinterpret_cast<T*>(pos);
-    pos += sizeof(T) + size;
-    return result;
-  }
+  return result;
+}
 
-  bool empty() const { return pos == begin; }
-  std::size_t free() const { return buffer + CAPACITY - pos; }
-  std::size_t size() const { return pos - buffer; }
-  void reset() { pos = begin; }
-  uint8_t* data() { return buffer; }
+inline std::vector<std::byte> fields(const Flow::Entry& entry) {
+  auto result = fields(entry.first);
+  auto f = fields(entry.second);
+  result.insert(result.end(), f.cbegin(), f.cend());
 
-};
+  return result;
+}
 
-class Connection {
-  std::unordered_map<std::size_t, std::size_t> templates;
-  uint16_t template_id{256};
-  std::size_t sequence_num{0};
+class Exporter {
+  using TemplateEntry = std::pair<uint16_t, std::vector<std::byte>>;
 
-  Buffer<BUFFER_SIZE> buffer;
-  net::Connection conn;
+  std::size_t _last_template{USER_TEMPLATES};
+  std::size_t _sequence_num{0};
 
-  template<typename T>
-  static uint8_t* after(T* header) {
-    return reinterpret_cast<uint8_t*>(header) + sizeof(T);
-  }
-
-  void export_template(const Flow::Record& record, std::size_t id) {
-    // Check if buffer is full and send if true
-    auto total_length = record.template_length() + sizeof(TemplateHeader);
-    if (total_length > buffer.free()) send();
-
-    auto* template_header = buffer.push<TemplateHeader>(record.template_length());
-    template_header->id = htons(2);
-    template_header->length = htons(total_length);
-    template_header->template_id = htons(id);
-    template_header->field_count = htons(record.template_fields());
-    record.export_template(after(template_header));
-  }
-
-  void export_record(const Flow::Record& record, std::size_t id) {
-    // Check if buffer is full and send if true
-    auto total_length = record.record_length() + sizeof(RecordHeader);
-    if (total_length > buffer.free()) send();
-    
-    auto* record_header = buffer.push<RecordHeader>(record.record_length());
-    record_header->template_id = htons(id);
-    record_header->length = htons(total_length);
-    record.export_record(after(record_header));
-  }
+  std::unordered_map<std::size_t, TemplateEntry> _templates;
+  std::unordered_map<std::size_t, std::vector<std::byte>> _records;
 
   public:
 
-  template<typename... Args>
-  Connection(Args... args):
-    conn(net::make_tcp_connection(args...)){
-    buffer.msg_header->version = htons(VERSION);
-  }
+  template<typename T>
+  void insert(T&& cache_entry) {
+    const auto type = Flow::type(cache_entry.second);
 
-
-  ~Connection() {
-    if (!buffer.empty())
-      send();
-  }
-
-  void to_export(Flow::Record& record) {
-    auto type = record.type_hash();
-    auto id = std::size_t{};
-
-    // Find if template was created
-    auto search = templates.find(type);
-    if (search == templates.end()) {
-      templates.emplace(type, template_id);
-      id = template_id++;
-      // TODO: Check if template_id id not overflow
-      export_template(record, id);
-    } else {
-      id = search->second;
+    auto search = _templates.find(type);
+    if (search == _templates.end()) {
+      auto t = fields(cache_entry);
+      _templates.emplace(type,
+          std::make_pair(_last_template, std::move(t)));
+      ++_last_template;
     }
 
-    // Send record
-    // Do not export record with count 0
-    if (record.empty()) return;
-    export_record(record, id);
-    record.clean();
+    // TODO(dudoslav): Buffer cannot exceed MTL
+    auto& buffer = _records[type];
+    auto v = values(cache_entry);
+    buffer.insert(buffer.end(), v.begin(), v.end());
   }
 
-  void send() {
-    buffer.msg_header->length = htons(buffer.size());
-    buffer.msg_header->timestamp = htonl(std::time(nullptr));
-    buffer.msg_header->sequence_num = htonl(sequence_num);
-    buffer.msg_header->domain_num = 0;
-    conn.write(buffer.data(), buffer.size());
-    buffer.reset();
+  void clear() {
+    _records.clear();
+  }
+
+  // TODO(dudoslav): Make const
+  template<typename Fun>
+  void for_each_buffer(Fun&& f) {
+    for (const auto& r: _records) {
+      auto buffer = std::vector<std::byte>{sizeof(MessageHeader)};
+
+      auto t = _templates[r.first]; // TODO(dudoslav): If exists
+
+      auto th = TemplateHeader{};
+      th.id = htons(TEMPLATE_ID);
+      th.length = htons(sizeof(th) + t.second.size());
+      th.template_id = htons(t.first);
+      th.field_count = htons(t.second.size() / 4);
+      
+      auto bth = std::as_bytes(std::span{&th, 1});
+
+      std::copy(bth.begin(), bth.end(), std::back_inserter(buffer));
+      std::copy(t.second.begin(), t.second.end(), std::back_inserter(buffer));
+
+      auto rh = RecordHeader{};
+      rh.template_id = htons(t.first);
+      rh.length = htons(sizeof(rh) + r.second.size());
+
+      auto brh = std::as_bytes(std::span{&rh, 1});
+
+      std::copy(brh.begin(), brh.end(), std::back_inserter(buffer));
+      std::copy(r.second.begin(), r.second.end(), std::back_inserter(buffer));
+
+      auto mh = MessageHeader{};
+      mh.version = htons(VERSION);
+      mh.length = htons(buffer.size());
+      mh.timestamp = htonl(std::time(nullptr));
+      mh.sequence_num = htonl(++_sequence_num);
+      mh.domain_num = 0;
+
+      auto bmh = std::as_bytes(std::span{&mh, 1});
+      std::copy(bmh.begin(), bmh.end(), buffer.begin());
+
+      f(buffer);
+    }
   }
 };
 

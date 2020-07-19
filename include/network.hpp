@@ -2,112 +2,189 @@
 
 #include <stdexcept>
 
-#include <unistd.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
-namespace net {
+namespace Net {
 
+/**
+ * RAII wrapper class for LINUX socket.
+ */
 class Socket {
-  int handle;
+  int _handle = -1;
 
+  /**
+   * Connection class must be able to create socket from
+   * file descriptor, since it is returned by connect(2).
+   */
   friend class Connection;
 
-  // Construtor from linux handle
-  Socket(int handle): handle(handle) {
-    if (handle == -1)
-      throw std::system_error{errno, std::system_category()};
-  }
+  /**
+   * Create socket from file descriptor, used by Connection
+   * class.
+   * @param handle LINUX file descriptor
+   */
+  explicit Socket(int handle): _handle(handle) {}
 
-  operator int() { return handle; }
+  Socket() = default;
+
+  [[nodiscard]] int descriptor() const { return _handle; }
 
   public:
 
-  // Construtor from linux socket function
+  /**
+   * Create socket from LINUX command socket(2).
+   * @param domain
+   * @param type
+   * @param protocol
+   * @throw std::system_error if failed to create socket
+   */
   Socket(int domain, int type, int protocol):
-    Socket(socket(domain, type, protocol)) {}
+    Socket(socket(domain, type, protocol)) {
+      if (_handle == -1) {
+        throw std::system_error{errno, std::system_category()};
+      }
+    }
 
-  ~Socket() { if (handle != -1) close(handle); }
+  /**
+   * Create default streaming socket. Most probably TCP. 
+   */
+  static Socket tcp() {
+    return Socket{PF_INET, SOCK_STREAM, 0};
+  }
+
+  ~Socket() noexcept { if (_handle != -1) { close(_handle); } }
 
   // Copy
   Socket(const Socket&) = delete;
   Socket& operator=(const Socket&) = delete;
 
   // Move
-  Socket(Socket&& o) noexcept : handle(o.handle) { o.handle = -1; };
-  Socket& operator=(Socket&& o) {
-    handle = o.handle;
-    o.handle = -1;
+  Socket(Socket&& other) noexcept {
+    *this = std::move(other);
+  }
+
+  Socket& operator=(Socket&& other) noexcept {
+    std::swap(_handle, other._handle);
+
     return *this;
   }
 };
 
-class Connection {
-  Socket socket;
+/**
+ * Wrapper class for all sockaddr_* structs.
+ */
+class SocketAddress {
+  using SockAddrStorage = struct sockaddr_storage;
+  using SockAddr = struct sockaddr;
+  using SockAddrIn = struct sockaddr_in;
 
-  // Construct from connected socket
-  Connection(Socket&& sock):
-    socket(std::move(sock)) {}
+  SockAddrStorage _saddr = {};
 
   public:
 
-  // Connect and construct
-  template<typename T>
-  Connection(Socket&& sock, T addr):
-    Connection(std::move(sock)) {
-    if (connect(socket, addr, addr.size()) == -1)
-      throw std::system_error{errno, std::system_category()};
+  explicit SocketAddress(SockAddrIn saddr) {
+    std::memcpy(&_saddr, &saddr, sizeof(saddr));
   }
 
-  ~Connection() { shutdown(socket, SHUT_RDWR); }
+  static SocketAddress ipv4(const std::string& addr, uint16_t port) {
+    auto saddr = SockAddrIn{};
+    inet_pton(AF_INET, addr.c_str(), &saddr.sin_addr);
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(port);
+
+    return SocketAddress{saddr};
+  }
+
+  [[nodiscard]] socklen_t size() const { return sizeof(_saddr); }
+
+  [[nodiscard]] SockAddr* sockaddr() {
+    return reinterpret_cast<SockAddr*>(&_saddr); // NOLINT
+  }
+
+  [[nodiscard]] const SockAddr* sockaddr() const {
+    return reinterpret_cast<const SockAddr*>(&_saddr); // NOLINT
+  }
+};
+
+/**
+ * RAII connection wrapper class. This class is used for connecting to
+ * remote server and send data. For this project writing to socket is
+ * enough.
+ */
+class Connection {
+  Socket _socket;
+
+  public:
+
+  /**
+   * Connect provided socket to given address.
+   * @param sock socket as rvalue
+   * @param saddr socket address as destination address
+   * @throw std::system_error if failed to connect socket
+   */
+  Connection(Socket&& sock, SocketAddress saddr):
+    _socket(std::move(sock)) {
+    if (connect(_socket.descriptor(), saddr.sockaddr(), saddr.size()) == -1) {
+      throw std::system_error{errno, std::system_category()};
+    }
+  }
+
+  ~Connection() noexcept { shutdown(_socket.descriptor(), SHUT_RDWR); }
+
+  /**
+   * Helper function for creating stream connection (most probably TCP)
+   * @see Connection::Connection();
+   * @param addr address of destination
+   * @param port port of destination
+   * @throw std::system_error if failed to connect socket
+   */
+  static Connection tcp(const std::string& addr, uint16_t port) {
+    return Connection{Socket::tcp(), SocketAddress::ipv4(addr, port)};
+  }
 
   // Copy
   Connection(const Connection&) = delete;
   Connection& operator=(const Connection&) = delete;
 
   // Move
-  Connection(Connection&& o) noexcept : socket(std::move(o.socket)) {}
-  Connection& operator=(Connection&& o) {
-    socket = std::move(o.socket);
+  Connection(Connection&& other) noexcept {
+    *this = std::move(other);
+  }
+
+  Connection& operator=(Connection&& other) noexcept {
+    std::swap(_socket, other._socket);
+
     return *this;
   }
 
-  // Send data with given size over socket
-  Connection& write(const unsigned char* data, std::size_t size) {
-    // TODO: On EAGAIN
-    if (::write(socket, data, size) == -1)
-      throw std::system_error{errno, std::system_category()};
+  /**
+   * Write into connection, since this is stream connection this should
+   * be guaranteed to arrive.
+   * @param data pointer to data block to send
+   * @param size size of data block to send
+   * @throw std::system_error if failed to send
+   */
+  Connection& write(const std::byte* data, std::size_t size) {
+    auto sent = std::size_t{0};
+
+    for (int n = 0;
+        sent < size;
+        n = send(_socket.descriptor(),
+          data + sent, // NOLINT: Pointer arithmetics are required
+          size - sent, 0)) {
+      if (n == -1) {
+        if (errno == EAGAIN) {
+          continue;
+        }
+        throw std::system_error{errno, std::system_category()};
+      }
+      sent += n;
+    }
+
     return *this;
   }
 };
 
-class SocketAddressIPv4 {
-  struct sockaddr_in saddr;
-
-  public:
-
-  SocketAddressIPv4(int addr, short port) {
-    saddr.sin_addr.s_addr = addr;
-    saddr.sin_family = AF_INET;
-    saddr.sin_port = htons(port);
-  }
-
-  SocketAddressIPv4(const char* saddr, short port):
-    SocketAddressIPv4(inet_addr(saddr), port) {}
-
-  socklen_t size() const { return sizeof(saddr); }
-
-  operator struct sockaddr*()
-    { return reinterpret_cast<struct sockaddr*>(&saddr); }
-  operator const struct sockaddr*() const
-    { return reinterpret_cast<const struct sockaddr*>(&saddr); }
-};
-
-// Network helper functions
-Socket make_tcp_socket() { return Socket{AF_INET, SOCK_STREAM, 0}; }
-
-Connection make_tcp_connection(const char* saddr, short port) {
-  return Connection(make_tcp_socket(), SocketAddressIPv4{saddr, port});
-}
-
-};
+}; // namespace Net
