@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.12)
 
 project(Flower)
 
-set(CMAKE_CXX_CLANG_TIDY clang-tidy)
+option(ENABLE_CLANG_TIDY "Enable static analysis with clang-tidy" OFF)
+
+if(ENABLE_CLANG_TIDY)
+  set(CMAKE_CXX_CLANG_TIDY clang-tidy)
+endif()
 
 find_package(Threads)
 find_package(libtins)
