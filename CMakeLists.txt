@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.14)
 
 project(Flower)
 
@@ -8,12 +8,22 @@ if(ENABLE_CLANG_TIDY)
   set(CMAKE_CXX_CLANG_TIDY clang-tidy)
 endif()
 
+# Download dependencies
+include(cmake/Dependencies.cmake)
+
+# Find system libraries
 find_package(Threads)
 find_package(libtins)
+
 add_subdirectory(lib)
 
 add_executable(flower main.cpp)
-target_link_libraries(flower PRIVATE Threads::Threads tins flower_plugins)
+target_link_libraries(flower PRIVATE
+  Threads::Threads
+  tins
+  clipp::clipp
+  toml11::toml11
+  flower_plugins)
 target_include_directories(flower PRIVATE include)
 target_compile_features(flower PRIVATE cxx_std_20)
 target_compile_options(flower PRIVATE -Wall -Wextra -pedantic)
