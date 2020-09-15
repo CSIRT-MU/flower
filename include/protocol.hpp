@@ -9,6 +9,8 @@
 
 #include <arpa/inet.h>
 
+#include <options.hpp>
+
 namespace Flow {
 
 static constexpr auto IPFIX_SHORT = 2;
@@ -55,12 +57,22 @@ enum class Type: unsigned long {
   DOT1Q = IPFIX_PROTOCOL_DOT1Q
 };
 
+struct [[gnu::packed]] TemplateField {
+  uint16_t type;
+  uint16_t size;
+};
+
 struct IP {
   uint32_t src;
   uint32_t dst;
 
   [[nodiscard]] std::size_t digest() const {
-    return combine(src, dst);
+    auto d = 0lu;
+    if (Options::Definitions::ip.src)
+      d = combine(d, src);
+    if (Options::Definitions::ip.dst)
+      d = combine(d, dst);
+    return d;
   }
 
   [[nodiscard]] static Type type() {
@@ -68,32 +80,45 @@ struct IP {
   }
 
   [[nodiscard]] std::vector<std::byte> values() const {
-    struct [[gnu::packed]] {
-      uint32_t src;
-      uint32_t dst;
-      uint16_t protocol;
-    } v = {};
-    v.src = src; // TODO(dudoslav): Doesn't need htonl, why?
-    v.dst = dst;
-    v.protocol = htons(IPFIX_PROTOCOL_IP);
+    auto result = std::vector<std::byte>{};
 
-    auto bv = std::as_bytes(std::span{&v, 1});
+    if (Options::Definitions::ip.src) {
+      auto sb = std::as_bytes(std::span{&src, 1});
+      std::copy(sb.begin(), sb.end(), std::back_inserter(result));
+    }
 
-    return {bv.begin(), bv.end()};
+    if (Options::Definitions::ip.dst) {
+      auto db = std::as_bytes(std::span{&dst, 1});
+      std::copy(db.begin(), db.end(), std::back_inserter(result));
+    }
+
+    auto protocol = htons(IPFIX_PROTOCOL_IP);
+    auto pb = std::as_bytes(std::span{&protocol, 1});
+    std::copy(pb.begin(), pb.end(), std::back_inserter(result));
+
+    return result;
   }
 
   [[nodiscard]] static std::vector<std::byte> fields() {
-    static const auto t = std::array{
-      htons(IPFIX_SRC_IP4_ADDR),
-      htons(IPFIX_LONG),
-      htons(IPFIX_DST_IP4_ADDR),
-      htons(IPFIX_LONG),
-      htons(IPFIX_PROTOCOL_IDENTIFIER),
-      htons(IPFIX_SHORT)
-    };
-    auto s = std::as_bytes(std::span{t});
+    auto result = std::vector<std::byte>{};
 
-    return {s.begin(), s.end()};
+    if (Options::Definitions::ip.src) {
+      auto st = TemplateField{htons(IPFIX_SRC_IP4_ADDR), htons(IPFIX_LONG)};
+      auto stb = std::as_bytes(std::span{&st, 1});
+      std::copy(stb.begin(), stb.end(), std::back_inserter(result));
+    }
+
+    if (Options::Definitions::ip.dst) {
+      auto dt = TemplateField{htons(IPFIX_DST_IP4_ADDR), htons(IPFIX_LONG)};
+      auto dtb = std::as_bytes(std::span{&dt, 1});
+      std::copy(dtb.begin(), dtb.end(), std::back_inserter(result));
+    }
+
+    auto pt = TemplateField{htons(IPFIX_PROTOCOL_IDENTIFIER), htons(IPFIX_SHORT)};
+    auto ptb = std::as_bytes(std::span{&pt, 1});
+    std::copy(ptb.begin(), ptb.end(), std::back_inserter(result));
+
+    return result;
   }
 };
 
