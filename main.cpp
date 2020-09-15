@@ -56,17 +56,15 @@ static Flow::Record reduce_packet(const Tins::EthernetII& packet) {
 }
 
 static void start(Plugins::Input input) {
-  auto options = Options::instance();
-
   auto export_interval = std::chrono::seconds{
-    std::stol(options.export_interval())
+    Options::export_interval
   };
 
-  std::cout << "Connecting to: " << options.output_ip_address() << '\n';
-  std::cout << "with port: " << options.output_port() << '\n';
+  std::cout << "Connecting to: " << Options::output_ip_address << '\n';
+  std::cout << "with port: " << Options::output_port << '\n';
 
-  auto conn = Net::Connection::tcp(options.output_ip_address(),
-      options.output_port());
+  auto conn = Net::Connection::tcp(Options::output_ip_address,
+      Options::output_port);
   auto exporter = IPFIX::Exporter{};
   auto cache = Flow::Cache{};
 
@@ -107,48 +105,49 @@ static void start(Plugins::Input input) {
 }
 
 int main(int argc, char** argv) {
-  auto& options = Options::instance();
   const auto* home = std::getenv("HOME");
-
   try {
     if (home != nullptr) {
-      options.load(std::string{home} + "/.flower.conf");
+      Options::load_file(std::string{home} + "/.flower.conf");
     }
-    options.parse(argc, argv);
-  } catch (const std::runtime_error& e) {
-    std::cerr << e.what() << '\n';
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "Error loading options file\n%s\n", e.what());
     return 1;
   }
 
+  Options::parse(argc, argv);
+
   auto plugin_manager = Plugins::Manager{"plugins"};
 
-  switch (options.activity()) {
-    case Options::Activity::LIST_PLUGINS:
-      std::cout << "Input plugins:" << std::endl;
+  switch (Options::mode) {
+    case Options::Mode::PRINT_PLUGINS:
+      std::printf("Input plugins:\n");
       for (const auto& p: plugin_manager.inputs()) {
-        std::cout << '\t' << p.info().name << std::endl;
+        std::printf("\t%s\n", p.info().name);
       }
       break;
-    case Options::Activity::PRINT_CONFIG:
-      std::cout << "Argument: " << options.argument() << '\n';
-      std::cout << "Input plugin: " << options.input_plugin() << '\n';
-      std::cout << "Export interval: " << options.export_interval() << '\n';
-      std::cout << "Ip address: " << options.output_ip_address() << '\n';
-      std::cout << "Port: " << options.output_port() << '\n';
+    case Options::Mode::PRINT_CONFIG:
+      std::printf("input_plugin: %s\n", Options::input_plugin.c_str());
+      std::printf("export_interval: %u\n", Options::export_interval);
+      std::printf("ip_address: %s\n", Options::output_ip_address.c_str());
+      std::printf("port: %u\n", Options::output_port);
+
+      std::printf("IP defintion:\n");
+      std::printf("\tsrc: %d\n", Options::Definitions::ip.src);
+      std::printf("\tdst: %d\n", Options::Definitions::ip.dst);
       break;
-    case Options::Activity::SHOW_USAGE:
-      std::cout << USAGE_STRING << std::endl;
-      break;
-    case Options::Activity::MAIN_ACTIVITY:
+    case Options::Mode::PROCESS:
       try {
-        auto input = plugin_manager.create_input(options.input_plugin(),
-            options.argument().c_str());
+        auto input = plugin_manager.create_input(
+            Options::input_plugin, Options::argument.c_str());
         start(std::move(input));
       } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
+        std::fprintf(stderr, "Error: %s\n", e.what());
         return 2;
       }
       break;
+    default:
+      return 0;
   }
 
   return 0;
