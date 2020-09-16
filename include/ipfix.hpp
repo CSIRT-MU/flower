@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <unordered_map>
+#include <span>
 
 #include <arpa/inet.h>
 
@@ -35,40 +36,6 @@ struct [[gnu::packed]] TemplateHeader {
   uint16_t field_count;
 };
 
-inline std::vector<std::byte> values(const Flow::Properties& props) {
-  auto ncount = htonl(props.count);
-  auto result = std::vector<std::byte>(sizeof(ncount));
-  std::memcpy(result.data(), &ncount, sizeof(ncount));
-
-  return result;
-}
-
-inline std::vector<std::byte> fields([[maybe_unused]] const Flow::Properties& props) {
-  static const auto t = std::array{
-    htons(Flow::IPFIX_PACKET_DELTA_COUNT),
-    htons(Flow::IPFIX_LONG)
-  };
-  auto s = std::as_bytes(std::span{t});
-
-  return {s.begin(), s.end()};
-}
-
-inline std::vector<std::byte> values(const Flow::Entry& entry) {
-  auto result = values(entry.first);
-  auto v = values(entry.second);
-  result.insert(result.end(), v.cbegin(), v.cend());
-
-  return result;
-}
-
-inline std::vector<std::byte> fields(const Flow::Entry& entry) {
-  auto result = fields(entry.first);
-  auto f = fields(entry.second);
-  result.insert(result.end(), f.cbegin(), f.cend());
-
-  return result;
-}
-
 class Exporter {
   using TemplateEntry = std::pair<uint16_t, std::vector<std::byte>>;
 
@@ -80,22 +47,18 @@ class Exporter {
 
   public:
 
-  template<typename T>
-  void insert(T&& cache_entry) {
-    const auto type = Flow::type(cache_entry.second);
+  bool has_template(std::size_t type) const {
+    return _templates.find(type) != _templates.end();
+  }
 
-    auto search = _templates.find(type);
-    if (search == _templates.end()) {
-      auto t = fields(cache_entry);
-      _templates.emplace(type,
-          std::make_pair(_last_template, std::move(t)));
-      ++_last_template;
-    }
+  void insert_template(std::size_t type, std::vector<std::byte> fields) {
+    _templates.emplace(type, std::make_pair(_last_template, fields));
+    ++_last_template;
+  }
 
-    // TODO(dudoslav): Buffer cannot exceed MTL
+  void insert_record(std::size_t type, std::vector<std::byte> values) {
     auto& buffer = _records[type];
-    auto v = values(cache_entry);
-    buffer.insert(buffer.end(), v.begin(), v.end());
+    std::copy(values.begin(), values.end(), std::back_inserter(buffer));
   }
 
   void clear() {

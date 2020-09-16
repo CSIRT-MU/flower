@@ -9,15 +9,6 @@
 namespace Flow {
 
 /**
- * Metadata used in stroring flow records.
- */
-struct Properties {
-  std::size_t count;
-  unsigned int first_timestamp;
-  unsigned int last_timestamp;
-};
-
-/**
  * Type used to store record with some metadata.
  */
 using Entry = std::pair<Properties, Record>;
@@ -41,9 +32,7 @@ public:
    * @param timestamp timestamp of captured record
    */
   template<typename T>
-  void insert(T&& record, unsigned int timestamp) {
-    auto key = digest(record);
-
+  void insert(std::size_t key, T&& record, unsigned int timestamp) {
     const auto lock = std::lock_guard{_mutex};
     auto search = _records.find(key);
     if (search != _records.end()) {

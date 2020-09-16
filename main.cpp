@@ -5,27 +5,11 @@
 
 #include <async.hpp>
 #include <flow.hpp>
+#include <network.hpp>
 #include <ipfix.hpp>
 #include <manager.hpp>
 #include <options.hpp>
-
-static void print_record(const Flow::Record& record) {
-  for (const auto& protocol: record) {
-    std::visit([](const auto& e){
-        using T = std::decay_t<decltype(e)>;
-        if constexpr (std::is_same_v<T, Flow::IP>) {
-        std::cout << "IP " << e.src << " " << e.dst << " -> ";
-        } else if constexpr (std::is_same_v<T, Flow::TCP>) {
-        std::cout << "TCP " << e.src << " " << e.dst << " -> ";
-        } else if constexpr (std::is_same_v<T, Flow::UDP>) {
-        std::cout << "UDP " << e.src << " " << e.dst << " -> ";
-        } else if constexpr (std::is_same_v<T, Flow::DOT1Q>) {
-        std::cout << "DOT1Q " << e.id << " -> ";
-        }
-        }, protocol);
-  }
-  std::cout << "END" << std::endl;
-}
+#include <serializer.hpp>
 
 static Flow::Record reduce_packet(const Tins::EthernetII& packet) {
   auto record = Flow::Record{};
@@ -35,15 +19,23 @@ static Flow::Record reduce_packet(const Tins::EthernetII& packet) {
   try {
     for (const auto& pdu: pdu_range) {
       if (pdu.pdu_type() == Tins::PDU::PDUType::IP) {
+        if (!Options::definition.ip.process)
+          continue;
         const auto& ip = dynamic_cast<const Tins::IP&>(pdu);
         record.emplace_back(Flow::IP{ip.src_addr(), ip.dst_addr()});
       } else if (pdu.pdu_type() == Tins::PDU::PDUType::TCP) {
+        if (!Options::definition.tcp.process)
+          continue;
         const auto& tcp = dynamic_cast<const Tins::TCP&>(pdu);
         record.emplace_back(Flow::TCP{tcp.sport(), tcp.dport()});
       } else if (pdu.pdu_type() == Tins::PDU::PDUType::UDP) {
+        if (!Options::definition.udp.process)
+          continue;
         const auto& udp = dynamic_cast<const Tins::UDP&>(pdu);
         record.emplace_back(Flow::UDP{udp.sport(), udp.dport()});
       } else if (pdu.pdu_type() == Tins::PDU::PDUType::DOT1Q) {
+        if (!Options::definition.dot1q.process)
+          continue;
         const auto& dot1q = dynamic_cast<const Tins::Dot1Q&>(pdu);
         record.emplace_back(Flow::DOT1Q{dot1q.id()});
       }
@@ -60,28 +52,30 @@ static void start(Plugins::Input input) {
     Options::export_interval
   };
 
-  std::cout << "Connecting to: " << Options::output_ip_address << '\n';
-  std::cout << "with port: " << Options::output_port << '\n';
+  std::cout << "Connecting to: " << Options::ip_address << '\n';
+  std::cout << "with port: " << Options::port << '\n';
 
-  auto conn = Net::Connection::tcp(Options::output_ip_address,
-      Options::output_port);
+  auto serializer = Flow::Serializer{Options::definition};
+  auto conn = Net::Connection::tcp(Options::ip_address,
+      Options::port);
   auto exporter = IPFIX::Exporter{};
   auto cache = Flow::Cache{};
 
   auto timer = Async::Timer{export_interval};
-  timer.start([&cache, &exporter, &conn](){
-      std::cout << "EXPORTING..." << std::endl;
-      cache.erase_if([&exporter](const auto& p){
-          auto& props = p.second.first;
-          std::cout << "COUNT: " << props.count;
-          std::cout << " FIRST: " << props.first_timestamp;
-          std::cout << " LAST: " << props.last_timestamp << std::endl;
-          print_record(p.second.second);
-          exporter.insert(p.second);
+  timer.start([&](){
+      cache.erase_if([&](const auto& p){
+          auto type = Flow::type(p.second.second);
+          if (!exporter.has_template(type)) {
+            exporter.insert_template(type, serializer.fields(p.second.second,
+                  p.second.first));
+          }
+          exporter.insert_record(type, serializer.values(p.second.second,
+                p.second.first));
           return true;
           });
 
       exporter.for_each_buffer([&conn](const auto& buffer){
+          std::printf("Buffer size: %lu\n", buffer.size());
           conn.write(buffer.data(), buffer.size());
           });
 
@@ -99,7 +93,7 @@ static void start(Plugins::Input input) {
     auto record = reduce_packet(packet);
 
     if (!record.empty()) {
-      cache.insert(std::move(record), raw.timestamp);
+      cache.insert(serializer.digest(record), std::move(record), raw.timestamp);
     }
   }
 }
@@ -107,15 +101,20 @@ static void start(Plugins::Input input) {
 int main(int argc, char** argv) {
   const auto* home = std::getenv("HOME");
   try {
-    if (home != nullptr) {
+    auto config_path = std::string{home} + "/.flower.conf";
+    if (std::filesystem::is_regular_file(config_path)) {
       Options::load_file(std::string{home} + "/.flower.conf");
+    }
+
+    if (std::filesystem::is_regular_file("./flower.conf")) {
+      Options::load_file("./flower.conf");
     }
   } catch (const std::exception& e) {
     std::fprintf(stderr, "Error loading options file\n%s\n", e.what());
     return 1;
   }
 
-  Options::parse(argc, argv);
+  Options::parse_args(argc, argv);
 
   auto plugin_manager = Plugins::Manager{"plugins"};
 
@@ -125,16 +124,6 @@ int main(int argc, char** argv) {
       for (const auto& p: plugin_manager.inputs()) {
         std::printf("\t%s\n", p.info().name);
       }
-      break;
-    case Options::Mode::PRINT_CONFIG:
-      std::printf("input_plugin: %s\n", Options::input_plugin.c_str());
-      std::printf("export_interval: %u\n", Options::export_interval);
-      std::printf("ip_address: %s\n", Options::output_ip_address.c_str());
-      std::printf("port: %u\n", Options::output_port);
-
-      std::printf("IP defintion:\n");
-      std::printf("\tsrc: %d\n", Options::Definitions::ip.src);
-      std::printf("\tdst: %d\n", Options::Definitions::ip.dst);
       break;
     case Options::Mode::PROCESS:
       try {
