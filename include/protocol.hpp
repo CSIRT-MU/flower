@@ -80,12 +80,12 @@ struct DOT1Q {
 };
 
 using Protocol = std::variant<IP, TCP, UDP, DOT1Q>;
-using Record = std::vector<Protocol>;
+using Chain = std::vector<Protocol>;
 
-[[nodiscard]] inline std::size_t type(const Record& record) {
+[[nodiscard]] inline std::size_t type(const Chain& chain) {
   auto result = 0ul;
 
-  for (const auto& protocol: record) {
+  for (const auto& protocol: chain) {
     auto type = std::visit([](const auto& p){
         return p.type(); }, protocol);
 

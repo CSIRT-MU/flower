@@ -1,6 +1,6 @@
 #include <serializer.hpp>
 
-#include <numeric>
+#include <algorithm>
 #include <array>
 
 #include <arpa/inet.h>
@@ -57,10 +57,10 @@ Serializer::Serializer(Flow::Definition def) : _def(def) {}
   return result;
 }
 
-[[nodiscard]] std::size_t Serializer::digest(const Record& record) const {
+[[nodiscard]] std::size_t Serializer::digest(const Chain& chain) const {
   auto result = 0ul;
   
-  for (const auto& protocol: record) {
+  for (const auto& protocol: chain) {
     auto hash = std::visit([&](const auto& p){
         return digest(p); }, protocol);
 
@@ -173,11 +173,11 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const DOT1Q& dot1q) c
 }
 
 [[nodiscard]]
-Serializer::BufferType Serializer::fields(const Record& record) const {
+Serializer::BufferType Serializer::fields(const Chain& chain) const {
   auto result = Serializer::BufferType{};
   auto bkit = std::back_inserter(result);
 
-  for (const auto& protocol: record) {
+  for (const auto& protocol: chain) {
     auto fs = std::visit([&](const auto& p){
         return fields(p); }, protocol);
 
@@ -210,9 +210,9 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const Properties& pro
 }
 
 [[nodiscard]]
-Serializer::BufferType Serializer::fields(const Record& record, const Properties& properties) const {
+Serializer::BufferType Serializer::fields(const Chain& chain, const Properties& properties) const {
   auto result = fields(properties);
-  auto rf = fields(record);
+  auto rf = fields(chain);
   std::copy(rf.begin(), rf.end(), std::back_inserter(result));
   return result;
 }
@@ -292,11 +292,11 @@ Serializer::BufferType Serializer::values(const DOT1Q& dot1q) const {
 }
 
 [[nodiscard]]
-Serializer::BufferType Serializer::values(const Record& record) const {
+Serializer::BufferType Serializer::values(const Chain& chain) const {
   auto result = Serializer::BufferType{};
   auto bkit = std::back_inserter(result);
 
-  for (const auto& protocol: record) {
+  for (const auto& protocol: chain) {
     auto vs = std::visit([&](const auto& p){
         return values(p); }, protocol);
 
@@ -333,9 +333,9 @@ Serializer::BufferType Serializer::values(const Properties& properties) const {
 }
 
 [[nodiscard]]
-Serializer::BufferType Serializer::values(const Record& record, const Properties& properties) const {
+Serializer::BufferType Serializer::values(const Chain& chain, const Properties& properties) const {
   auto result = values(properties);
-  auto rv = values(record);
+  auto rv = values(chain);
   std::copy(rv.begin(), rv.end(), std::back_inserter(result));
   return result;
 }

@@ -11,7 +11,7 @@ namespace Options {
 Mode mode = Mode::PRINT_HELP;
 std::string argument = "";
 std::string input_plugin = "FileInput";
-std::size_t export_interval = 120;
+unsigned int export_interval = 120;
 std::string ip_address = "127.0.0.1";
 short port = 20'000;
 Flow::Definition definition = {};

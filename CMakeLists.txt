@@ -25,7 +25,7 @@ target_link_libraries(flower PRIVATE
   toml11::toml11
   flower_plugins)
 target_include_directories(flower PRIVATE include)
-target_compile_features(flower PRIVATE cxx_std_20)
+target_compile_features(flower PRIVATE cxx_std_17)
 target_compile_options(flower PRIVATE -Wall -Wextra -pedantic)
 
 add_subdirectory(plugins)

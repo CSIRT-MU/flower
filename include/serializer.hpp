@@ -32,14 +32,14 @@ class Serializer {
   [[nodiscard]] BufferType fields([[maybe_unused]] const Properties&) const;
   [[nodiscard]] BufferType values(const Properties&) const;
 
-  [[nodiscard]] BufferType fields(const Record&) const;
-  [[nodiscard]] BufferType values(const Record&) const;
+  [[nodiscard]] BufferType fields(const Chain&) const;
+  [[nodiscard]] BufferType values(const Chain&) const;
 
 public:
 
-  [[nodiscard]] std::size_t digest(const Record&) const;
-  [[nodiscard]] BufferType fields(const Record&, const Properties&) const;
-  [[nodiscard]] BufferType values(const Record&, const Properties&) const;
+  [[nodiscard]] std::size_t digest(const Chain&) const;
+  [[nodiscard]] BufferType fields(const Chain&, const Properties&) const;
+  [[nodiscard]] BufferType values(const Chain&, const Properties&) const;
 
   Serializer(Flow::Definition);
 

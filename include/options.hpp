@@ -18,7 +18,7 @@ enum class Mode {
 extern Mode mode;
 extern std::string argument;
 extern std::string input_plugin;
-extern std::size_t export_interval;
+extern unsigned int export_interval;
 extern std::string ip_address;
 extern short port;
 extern Flow::Definition definition;
