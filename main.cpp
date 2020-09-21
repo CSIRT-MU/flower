@@ -10,6 +10,7 @@
 #include <manager.hpp>
 #include <options.hpp>
 #include <serializer.hpp>
+#include <log.hpp>
 
 constexpr static auto CONFIG_NAME = "flower.conf";
 constexpr static auto CACHE_INTERVAL = 20;
@@ -55,10 +56,10 @@ static Flow::Chain reduce_packet(const Tins::EthernetII& packet) {
 
 static void on_signal([[maybe_unused]] int signal) {
   if (should_close) {
-    std::printf("Exiting...\n");
+    Log::info("Exiting...\n");
     std::exit(1);
   }
-  std::printf("Shuting down...\n");
+  Log::info("Shuting down...\n");
   should_close = true;
 }
 
@@ -118,16 +119,18 @@ static void start(Plugins::Input input) {
         auto now = static_cast<unsigned int>(std::time(nullptr));
         auto active = now - props.first_timestamp;
         auto idle = now - props.last_timestamp;
-        if (active > Options::export_interval) {
-          std::printf("Active timeout with error: %u\n", active - Options::export_interval);
+        if (active > Options::active_timeout) {
+          Log::debug("Active timeout with error: %u\n",
+              active - Options::active_timeout);
           if (!exporter.has_template(type)) {
             exporter.insert_template(type, serializer.fields(record, props));
           }
           exporter.insert_record(type, serializer.values(record, props));
           props = {0, now, now};
         }
-        if (idle > Options::export_interval) {
-          std::printf("Idle timeout with error: %u\n", idle - Options::export_interval);
+        if (idle > Options::idle_timeout) {
+          Log::debug("Idle timeout with error: %u\n",
+              idle - Options::idle_timeout);
           if (!exporter.has_template(type)) {
             exporter.insert_template(type, serializer.fields(record, props));
           }
@@ -178,7 +181,7 @@ int main(int argc, char** argv) {
             Options::input_plugin, Options::argument.c_str());
         start(std::move(input));
       } catch (const std::exception& e) {
-        std::fprintf(stderr, "Error: %s\n", e.what());
+        Log::error("Error: %s\n", e.what());
         return 2;
       }
       break;

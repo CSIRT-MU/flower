@@ -19,6 +19,8 @@ extern Mode mode;
 extern std::string argument;
 extern std::string input_plugin;
 extern unsigned int export_interval;
+extern unsigned int active_timeout;
+extern unsigned int idle_timeout;
 extern std::string ip_address;
 extern short port;
 extern Flow::Definition definition;

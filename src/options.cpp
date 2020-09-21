@@ -5,6 +5,8 @@
 #include <clipp.h>
 #include <toml.hpp>
 
+#include <log.hpp>
+
 namespace Options {
 
 // OPTIONS
@@ -12,39 +14,66 @@ Mode mode = Mode::PRINT_HELP;
 std::string argument = "";
 std::string input_plugin = "FileInput";
 unsigned int export_interval = 120;
+unsigned int active_timeout = 600;
+unsigned int idle_timeout = 300;
 std::string ip_address = "127.0.0.1";
 short port = 20'000;
 Flow::Definition definition = {};
 
 using namespace clipp;
 
-static auto mode_process = (
-    command("process") >> set(mode, Mode::PROCESS),
-    value("plugin_argument", argument),
-    option("-I", "--input_plugin") & value("plugin_name") >> input_plugin,
-    option("-e", "--export_interval") & value("seconds") >> export_interval,
-    option("-o", "--ip_address") & value("address") >> ip_address,
-    option("-p", "--port") & value("port") >> port
+static auto mode_process = "Process options:"
+  % (
+      command("process").set(mode, Mode::PROCESS),
+      value("plugin_argument", argument)
+      % "Argument plugin depends on plugin implementation",
+      (option("-I", "--input_plugin") & value("plugin_name", input_plugin))
+      % "Input plugin name to use [default: FileInput]",
+      (option("-e", "--export_interval") & value("seconds", export_interval))
+      % "CHANGEME",
+      (option("-a", "--active_timeout") & value("seconds", active_timeout))
+      % "CHANGEME",
+      (option("-i", "--idle_timeout") & value("seconds", idle_timeout))
+      % "CHANGEME",
+      (option("-o", "--ip_address") & value("address", ip_address))
+      % "IP address of IPFIX collector",
+      (option("-p", "--port") & value("port", port))
+      % "TCP port of IPFIX collector"
     );
 
-static auto mode_print_plugins = (
-    command("plugins") >> set(mode, Mode::PRINT_PLUGINS)
-    );
+static auto mode_print_plugins = "Prints all available plugins"
+  % (command("plugins").set(mode, Mode::PRINT_PLUGINS));
 
-static auto mode_print_config = (
-    command("config") >> set(mode, Mode::PRINT_CONFIG)
+static auto mode_print_config = "Prints current program configuration"
+  % (command("config").set(mode, Mode::PRINT_CONFIG));
+
+static auto logging_flags = "Logging options:"
+  % (
+      option("-d", "--debug")([](){ Log::set_level(Log::Level::DEBUG); })
+      % "Set log level to debug",
+      option("-i", "--info")([](){ Log::set_level(Log::Level::INFO); })
+      % "Set log level to info",
+      option("-w", "--warn")([](){ Log::set_level(Log::Level::WARN); })
+      % "Set log level to info",
+      option("-e", "--error")([](){ Log::set_level(Log::Level::ERROR); })
+      % "Set log level to info"
     );
 
 static auto cli = (
-    mode_process
-    | mode_print_plugins
+    mode_print_plugins
     | mode_print_config
     | (command("-h", "--help") >> set(mode, Mode::PRINT_HELP))
+    % "Print this help"
     | (command("-v", "--version") >> set(mode, Mode::PRINT_VERSION))
+    % "Prints version"
+    | mode_process
+    , logging_flags
     );
 
 void parse_args(int argc, char** argv) {
   if (!parse(argc, argv, cli)) {
+    std::cout << "Invalid input\n";
+    std::cout << "USAGE:\n";
     std::cout << usage_lines(cli, argv[0]) << '\n';
     return;
   }
