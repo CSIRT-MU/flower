@@ -321,11 +321,11 @@ Serializer::BufferType Serializer::values(const Properties& properties) const {
   auto p = reinterpret_cast<const std::byte*>(&count);
   std::copy_n(p, sizeof(count), bkit);
 
-  auto first_timestamp = htonl(properties.first_timestamp);
+  auto first_timestamp = htonl(properties.first_timestamp * 1000);
   p = reinterpret_cast<const std::byte*>(&first_timestamp);
   std::copy_n(p, sizeof(first_timestamp), bkit);
 
-  auto last_timestamp = htonl(properties.last_timestamp);
+  auto last_timestamp = htonl(properties.last_timestamp * 1000);
   p = reinterpret_cast<const std::byte*>(&last_timestamp);
   std::copy_n(p, sizeof(last_timestamp), bkit);
 

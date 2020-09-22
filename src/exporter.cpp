@@ -72,7 +72,7 @@ bool Exporter::has_template(std::size_t type) const {
 }
 
 void Exporter::insert_template(std::size_t type, std::vector<std::byte> fields) {
-  _templates.emplace(type, std::make_pair(_last_template, fields));
+  _templates.emplace(type, std::make_pair(_last_template, std::move(fields)));
   ++_last_template;
 }
 
@@ -83,7 +83,7 @@ void Exporter::insert_record(std::size_t type, std::vector<std::byte> values) {
     export_flow(type);
   }
 
-  std::copy(values.begin(), values.end(), std::back_inserter(buffer));
+  std::move(values.begin(), values.end(), std::back_inserter(buffer));
 }
 
 void Exporter::export_all() {

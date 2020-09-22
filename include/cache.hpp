@@ -1,7 +1,6 @@
 #pragma once
 
 #include <unordered_map>
-#include <mutex>
 
 #include <protocol.hpp>
 
@@ -25,26 +24,15 @@ class Cache {
   using Timestamp = unsigned int;
   using RecordsType = std::unordered_map<Digest, Record>;
   using CacheType = std::unordered_map<Type, RecordsType>;
-  using RangeType = std::pair<RecordsType::iterator, RecordsType::iterator>;
+  using RangeType = std::tuple<RecordsType::iterator, RecordsType::iterator, RecordsType::iterator>;
 
   CacheType _records;
-  mutable std::mutex _mutex;
 
 public:
 
   RangeType insert(Type, Digest, Chain, Timestamp);
   void erase(Type, RecordsType::iterator);
-
-  template<typename Fun>
-  void for_each(Fun&& f) {
-    const auto lock = std::lock_guard{_mutex};
-    for (auto& [type, cache]: _records) {
-      for (auto& [_, entry]: cache) {
-        auto& [props, chain] = entry;
-        f(type, props, chain);
-      }
-    }
-  }
+  std::size_t records_size(Type) const;
 };
 
 } // namespace Flow

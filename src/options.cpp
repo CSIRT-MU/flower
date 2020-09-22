@@ -13,7 +13,7 @@ namespace Options {
 Mode mode = Mode::PRINT_HELP;
 std::string argument = "";
 std::string input_plugin = "FileInput";
-unsigned int export_interval = 120;
+unsigned int export_interval = 4;
 unsigned int active_timeout = 600;
 unsigned int idle_timeout = 300;
 std::string ip_address = "127.0.0.1";
@@ -60,13 +60,13 @@ static auto logging_flags = "Logging options:"
     );
 
 static auto cli = (
-    mode_print_plugins
+    mode_process
+    | mode_print_plugins
     | mode_print_config
     | (command("-h", "--help") >> set(mode, Mode::PRINT_HELP))
     % "Print this help"
     | (command("-v", "--version") >> set(mode, Mode::PRINT_VERSION))
     % "Prints version"
-    | mode_process
     , logging_flags
     );
 
