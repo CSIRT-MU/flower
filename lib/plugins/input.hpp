@@ -13,9 +13,9 @@ class Input {
   static constexpr auto FINALIZE_FUNCTION = "finalize";
   static constexpr auto GET_PACKET_FUNCTION = "get_packet";
 
-  using InitFun = void(const char*);
-  using FinalizeFun = void();
-  using GetPacketFun = Packet();
+  using InitFun = InitRT(const char*);
+  using FinalizeFun = FinalizeRT();
+  using GetPacketFun = GetPacketRT();
 
   Plugin _plugin;
 
@@ -36,7 +36,10 @@ public:
     _init(_plugin.function<InitFun>(INIT_FUNCTION)),
     _finalize(_plugin.function<FinalizeFun>(FINALIZE_FUNCTION)),
     _get_packet(_plugin.function<GetPacketFun>(GET_PACKET_FUNCTION)) {
-      _init(arg);
+      auto result = _init(arg);
+      if (result.type == ERROR) {
+        throw std::runtime_error{result.error_msg};
+      }
     }
 
   Input(const std::string& file, const char* arg):
@@ -72,7 +75,7 @@ public:
    * thread safe call.
    * @return Packet packet provided by plugin, if empty packet.data is equal to nullptr
    */
-  Packet get_packet() {
+  GetPacketRT get_packet() {
     return _get_packet();
   }
 };

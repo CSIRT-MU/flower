@@ -2,35 +2,47 @@
 
 #include <input.h>
 
-pcap_t* handle;
-char errbuf[PCAP_ERRBUF_SIZE];
+static pcap_t *handle;
+static char errbuf[PCAP_ERRBUF_SIZE];
 
-struct PluginInfo info() {
+InfoRT info() {
   struct PluginInfo result;
   result.type = INPUT_PLUGIN;
   result.name = "InterfaceInput";
+  result.description =
+      "Input from network interface\n"
+      "The argument is a name of the interface used to capture packets\n";
   return result;
 }
 
-void init(const char* arg) {
+InitRT init(const char *arg) {
+  struct InitResult result = {OK, NULL};
   handle = pcap_open_live(arg, BUFSIZ, 1, 1000, errbuf);
-  // TODO(dudoslav): Handle error
+
+  if (handle) {
+    return result;
+  } else {
+    result.type = ERROR;
+    result.error_msg = errbuf;
+    return result;
+  }
 }
 
-void finalize() {
-  pcap_close(handle);
-}
+FinalizeRT finalize() { pcap_close(handle); }
 
-struct Packet get_packet() {
+GetPacketRT get_packet() {
   struct pcap_pkthdr header;
-  const u_char* data = pcap_next(handle, &header);
-  struct Packet result;
-  result.data = data;
+  const u_char *data = pcap_next(handle, &header);
+  struct GetPacketResult result = {END_OF_INPUT, {}};
 
-  if (!data) return result;
-  result.len = header.len;
-  result.caplen = header.caplen;
-  result.timestamp = header.ts.tv_sec;
+  if (!data)
+    return result;
+  result.type = PACKET;
+  result.packet.data = data;
+  result.packet.len = header.len;
+  result.packet.caplen = header.caplen;
+  result.packet.sec = header.ts.tv_sec;
+  result.packet.usec = header.ts.tv_usec;
 
   return result;
 }

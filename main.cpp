@@ -12,8 +12,6 @@
 #include <log.hpp>
 
 constexpr static auto CONFIG_NAME = "flower.conf";
-constexpr static auto CACHE_INTERVAL_MIN = 5ul;
-constexpr static auto CACHE_INTERVAL_COEF = 20;
 
 static volatile auto should_close = std::atomic{false};
 
@@ -21,7 +19,7 @@ static Flow::Chain reduce_packet(const Tins::EthernetII& packet) {
   auto chain = Flow::Chain{};
   auto pdu_range = Tins::iterate_pdus(packet);
   // Small optimization if needed
-  // chain.reserve(std::distance(pdu_range.begin(), pdu_range.end()));
+  chain.reserve(std::distance(pdu_range.begin(), pdu_range.end()));
 
   for (const auto& pdu: pdu_range) {
     if (pdu.pdu_type() == Tins::PDU::PDUType::IP) {
@@ -50,97 +48,106 @@ static Flow::Chain reduce_packet(const Tins::EthernetII& packet) {
   return chain;
 }
 
-static void export_if_timeout(
-    std::size_t type,
-    Flow::Properties& props,
-    Flow::Chain& chain,
-    Flow::Exporter& exporter,
-    Flow::Serializer& serializer) {
-  if (props.count == 0) {
-    return;
-  }
-
-  auto now = static_cast<unsigned int>(std::time(nullptr));
-  auto active = now - props.first_timestamp;
-  auto idle = now - props.last_timestamp;
-
-  if (active > Options::active_timeout) {
-    Log::debug("Active timeout with error: %us\n",
-        active - Options::active_timeout);
-    if (!exporter.has_template(type)) {
-      exporter.insert_template(type, serializer.fields(chain, props));
-    }
-    exporter.insert_record(type, serializer.values(chain, props));
-    props = {0, now, now};
-  } else if (idle > Options::idle_timeout) {
-    Log::debug("Idle timeout with error: %us\n",
-        idle - Options::idle_timeout);
-    if (!exporter.has_template(type)) {
-      exporter.insert_template(type, serializer.fields(chain, props));
-    }
-    exporter.insert_record(type, serializer.values(chain, props));
-    props = {0, now, now};
-  }
-}
-
 static void on_signal([[maybe_unused]] int signal) {
   if (should_close) {
     Log::info("Exiting...\n");
     std::exit(1);
   }
-  Log::info("Shuting down...\n");
+  Log::info("Shuting down. Please wait for cleanup...\n");
   should_close = true;
 }
 
 static void start(Plugins::Input input) {
+  /* Register interrupt signal to wait for cleanup */
   std::signal(SIGINT, on_signal);
 
   auto export_interval = std::chrono::seconds{
     Options::export_interval
   };
 
+  /* Initialize all required structures */
   auto serializer = Flow::Serializer{Options::definition};
   auto cache = Flow::Cache{};
   auto exporter = Flow::Exporter{Options::ip_address, Options::port};
 
+  auto peek_digest = 0ul;
+  /* Start main application loop */
   Log::info("Starting packet processing loop...\n");
   while (not should_close) {
+    /* Get packet from input plugin */
     auto raw = input.get_packet();
-    if (raw.data == nullptr) {
+    if (raw.type == END_OF_INPUT) {
       break;
     }
 
-    auto packet = Tins::EthernetII{raw.data,
-      static_cast<unsigned int>(raw.caplen)};
+    /* Parse packet */
+    auto packet = Tins::EthernetII{raw.packet.data,
+      static_cast<unsigned int>(raw.packet.caplen)};
     auto chain = reduce_packet(packet);
 
-    if (!chain.empty()) {
-      auto type = Flow::type(chain);
-      auto [b, r, e] = cache.insert(
-          type,
+    if (not chain.empty()) {
+      auto& [curr_digest, record] = *cache.insert(
           serializer.digest(chain),
           std::move(chain),
-          raw.timestamp);
+          raw.packet.sec);
 
-      export_if_timeout(type, r->second.first, r->second.second, exporter, serializer);
+      auto& chain = record.second;
 
-      auto s = cache.records_size(type);
-      auto interval = std::max(s / CACHE_INTERVAL_COEF, CACHE_INTERVAL_MIN);
-      Log::debug("Peaking into %lu records\n", interval);
-      for (auto [it, c] = std::make_pair(std::next(r), 0ul);
-          it != r && c != interval;
-          ++it, ++c) {
-
-        if (it == e) {
-          it = b;
+      /* Idle timeout check */
+      auto it = cache.find(peek_digest);
+      auto to_remove = std::vector<std::size_t>{};
+      for (std::size_t i = 0; i < 5; ++i, ++it) {
+        if (cache.begin() == cache.end()) {
+          break;
         }
 
-        auto& [props, chain] = it->second;
-        export_if_timeout(type, props, chain, exporter, serializer);
+        if (it == cache.end()) {
+          it = cache.begin();
+        }
+
+        auto& [i_props, i_chain] = it->second;
+        auto i_type = Flow::type(i_chain);
+        /* Check timestamps */
+        auto time_diff = raw.packet.sec - i_props.last_timestamp;
+        if (time_diff > Options::idle_timeout) {
+          Log::debug("Idle timeout with error %lus\n", time_diff - Options::idle_timeout);
+          if (not exporter.has_template(i_type)) {
+            exporter.insert_template(i_type,
+                serializer.fields(i_chain, i_props));
+          }
+          exporter.insert_record(i_type, serializer.values(i_chain, i_props));
+          to_remove.emplace_back(it->first);
+        }
+      }
+
+      if (it != cache.end()) {
+        auto next = std::next(it);
+        if (next != cache.end()) {
+          peek_digest = next->first;
+        }
+      }
+
+      for (const auto& d: to_remove) {
+        cache.erase(d);
+      }
+
+      auto type = Flow::type(chain);
+      auto& props = record.first;
+      auto time_diff = raw.packet.sec - props.first_timestamp;
+      /* Active timeout check */
+      if (time_diff > Options::active_timeout) {
+        Log::debug("Active timeout with error %lus\n", time_diff - Options::active_timeout);
+        if (not exporter.has_template(type)) {
+          exporter.insert_template(type,
+              serializer.fields(chain, props));
+        }
+        exporter.insert_record(type, serializer.values(chain, props));
+        props = {0, raw.packet.sec, raw.packet.sec};
       }
     }
   }
 
+  /* When exiting the application export all cached records */
   exporter.export_all();
 }
 

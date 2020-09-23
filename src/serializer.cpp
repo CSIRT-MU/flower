@@ -199,9 +199,9 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const Properties& pro
   static const auto t = std::array{
     htons(IPFIX_PACKET_DELTA_COUNT),
     htons(IPFIX_LONG),
-    htons(IPFIX_START_TIME),
+    htons(IPFIX_FLOW_START_SECONDS),
     htons(IPFIX_LONG),
-    htons(IPFIX_END_TIME),
+    htons(IPFIX_FLOW_END_SECONDS),
     htons(IPFIX_LONG)
   };
   auto tp = reinterpret_cast<const std::byte*>(t.data());
@@ -321,11 +321,11 @@ Serializer::BufferType Serializer::values(const Properties& properties) const {
   auto p = reinterpret_cast<const std::byte*>(&count);
   std::copy_n(p, sizeof(count), bkit);
 
-  auto first_timestamp = htonl(properties.first_timestamp * 1000);
+  auto first_timestamp = htonl(properties.first_timestamp);
   p = reinterpret_cast<const std::byte*>(&first_timestamp);
   std::copy_n(p, sizeof(first_timestamp), bkit);
 
-  auto last_timestamp = htonl(properties.last_timestamp * 1000);
+  auto last_timestamp = htonl(properties.last_timestamp);
   p = reinterpret_cast<const std::byte*>(&last_timestamp);
   std::copy_n(p, sizeof(last_timestamp), bkit);
 

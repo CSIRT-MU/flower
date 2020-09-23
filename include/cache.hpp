@@ -15,24 +15,22 @@ namespace Flow {
  */
 class Cache {
 
-  /**
-   * Type used to store record with some metadata.
-   */
   using Record = std::pair<Properties, Chain>;
   using Type = std::size_t;
   using Digest = std::size_t;
   using Timestamp = unsigned int;
   using RecordsType = std::unordered_map<Digest, Record>;
-  using CacheType = std::unordered_map<Type, RecordsType>;
-  using RangeType = std::tuple<RecordsType::iterator, RecordsType::iterator, RecordsType::iterator>;
 
-  CacheType _records;
+  RecordsType _records;
 
 public:
 
-  RangeType insert(Type, Digest, Chain, Timestamp);
-  void erase(Type, RecordsType::iterator);
-  std::size_t records_size(Type) const;
+  RecordsType::iterator insert(Digest, Chain, Timestamp);
+  void erase(Digest);
+  std::size_t size() const;
+  RecordsType::iterator find(Digest);
+  RecordsType::iterator begin();
+  RecordsType::iterator end();
 };
 
 } // namespace Flow

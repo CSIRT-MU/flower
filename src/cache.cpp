@@ -2,15 +2,14 @@
 
 namespace Flow {
 
-Cache::RangeType Cache::insert(Type type, Digest digest, Chain chain, Timestamp timestamp) {
-  auto& type_records = _records[type];
-
-  auto search = type_records.find(digest);
-  if (search == type_records.end()) {
-    auto [it, _] = type_records.emplace(digest,
+Cache::RecordsType::iterator
+Cache::insert(Digest digest, Chain chain, Timestamp timestamp) {
+  auto search = _records.find(digest);
+  if (search == _records.end()) {
+    auto [it, _] = _records.emplace(digest,
         Record{Properties{1, timestamp, timestamp}, std::move(chain)});
 
-    return {type_records.begin(), it, type_records.end()};
+    return it;
   } else {
     auto& props = search->second.first;
 
@@ -22,16 +21,28 @@ Cache::RangeType Cache::insert(Type type, Digest digest, Chain chain, Timestamp 
       props.last_timestamp = timestamp;
     }
 
-    return {type_records.begin(), search, type_records.end()};
+    return search;
   }
 }
 
-void Cache::erase(Type type, RecordsType::iterator position) {
-  _records[type].erase(position);
+void Cache::erase(Digest digest) {
+  _records.erase(digest);
 }
 
-std::size_t Cache::records_size(Type type) const {
-  return _records.find(type)->second.size();
+std::size_t Cache::size() const {
+  return _records.size();
+}
+
+Cache::RecordsType::iterator Cache::find(Digest digest) {
+  return _records.find(digest);
+}
+
+Cache::RecordsType::iterator Cache::begin() {
+  return _records.begin();
+}
+
+Cache::RecordsType::iterator Cache::end() {
+  return _records.end();
 }
 
 } // namespace Flow
