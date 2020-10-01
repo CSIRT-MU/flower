@@ -14,4 +14,11 @@ struct PluginInfo {
    * uniquely define each plugin.
    */
   int type;
+
+  /**
+   * Used as description
+   */
+  const char* description;
 };
+
+typedef struct PluginInfo InfoRT;

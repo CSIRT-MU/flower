@@ -24,7 +24,37 @@ struct Packet {
   unsigned int caplen;
 
   /**
-   * Timestamp of packet capture.
+   * Timestamp seconds of packet capture.
    */
-  unsigned int timestamp;
+  unsigned int sec;
+
+  /**
+   * Timestamp nanoseconds of packet capture.
+   */
+  unsigned int usec;
 };
+
+enum InitResultType {
+  OK,
+  ERROR
+};
+
+struct InitResult {
+  enum InitResultType type;
+  const char* error_msg;
+};
+
+enum GetPacketResultType {
+  TIMEOUT,
+  END_OF_INPUT,
+  PACKET
+};
+
+struct GetPacketResult {
+  enum GetPacketResultType type;
+  struct Packet packet;
+};
+
+typedef struct GetPacketResult GetPacketRT;
+typedef struct InitResult InitRT;
+typedef void FinalizeRT;

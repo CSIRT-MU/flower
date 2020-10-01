@@ -1,8 +1,11 @@
 #pragma once
 
 #include <stdexcept>
+#include <system_error>
+#include <cstring>
 
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
