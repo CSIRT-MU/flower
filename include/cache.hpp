@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <ctime>
 
 #include <protocol.hpp>
 
@@ -15,10 +16,9 @@ namespace Flow {
  */
 class Cache {
 
-  using Record = std::pair<Properties, Chain>;
   using Type = std::size_t;
   using Digest = std::size_t;
-  using Timestamp = unsigned int;
+  using Timestamp = timeval;
   using RecordsType = std::unordered_map<Digest, Record>;
 
   RecordsType _records;

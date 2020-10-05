@@ -28,5 +28,6 @@ extern Flow::Definition definition;
 // FUNCTIONS
 void parse_args(int, char**);
 void load_file(const std::string&);
+void print_help(const char*);
 
 } // namespace Options

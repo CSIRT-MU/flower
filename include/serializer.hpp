@@ -7,7 +7,7 @@ namespace Flow {
 
 class Serializer {
 
-  const Flow::Definition _def;
+  Flow::Definition _def;
 
   using BufferType = std::vector<std::byte>;
 
@@ -41,7 +41,7 @@ public:
   [[nodiscard]] BufferType fields(const Chain&, const Properties&) const;
   [[nodiscard]] BufferType values(const Chain&, const Properties&) const;
 
-  Serializer(Flow::Definition);
+  void set_definition(Flow::Definition);
 
 };
 

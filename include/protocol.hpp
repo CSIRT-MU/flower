@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ctime>
 #include <variant>
 #include <vector>
 
@@ -40,13 +41,17 @@ enum class Type: short {
   DOT1Q = IPFIX_PROTOCOL_DOT1Q
 };
 
+[[nodiscard]] inline std::size_t ttou(const Type& type) {
+  return static_cast<std::underlying_type_t<Type>>(type);
+}
+
 /**
  * Metadata used in stroring flow records.
  */
 struct Properties {
   std::size_t count;
-  unsigned int first_timestamp;
-  unsigned int last_timestamp;
+  timeval first_timestamp;
+  timeval last_timestamp;
 };
 
 struct IP {
@@ -86,6 +91,11 @@ struct DOT1Q {
 
 using Protocol = std::variant<IP, TCP, UDP, DOT1Q>;
 using Chain = std::vector<Protocol>;
+using Record = std::pair<Properties, Chain>;
+
+[[nodiscard]] inline bool tsgeq(timeval f, timeval s) {
+  return f.tv_sec == s.tv_sec ? f.tv_usec > s.tv_usec : f.tv_sec > s.tv_sec;
+}
 
 [[nodiscard]] inline std::size_t type(const Chain& chain) {
   auto result = 0ul;

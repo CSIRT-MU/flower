@@ -20,6 +20,7 @@ InitRT init(const char *arg) {
   handle = pcap_open_live(arg, BUFSIZ, 1, 1000, errbuf);
 
   if (handle) {
+    pcap_set_timeout(handle, 1000);
     return result;
   } else {
     result.type = ERROR;
@@ -31,18 +32,31 @@ InitRT init(const char *arg) {
 FinalizeRT finalize() { pcap_close(handle); }
 
 GetPacketRT get_packet() {
-  struct pcap_pkthdr header;
-  const u_char *data = pcap_next(handle, &header);
+  struct pcap_pkthdr *header;
+  const u_char *data;
+  int status = pcap_next_ex(handle, &header, &data);
+
   struct GetPacketResult result = {END_OF_INPUT, {}};
 
-  if (!data)
+  if (status == 1) {
+    result.type = PACKET;
+    result.packet.data = data;
+    result.packet.len = header->len;
+    result.packet.caplen = header->caplen;
+    result.packet.sec = header->ts.tv_sec;
+    result.packet.usec = header->ts.tv_usec;
     return result;
-  result.type = PACKET;
-  result.packet.data = data;
-  result.packet.len = header.len;
-  result.packet.caplen = header.caplen;
-  result.packet.sec = header.ts.tv_sec;
-  result.packet.usec = header.ts.tv_usec;
+  }
+
+  if (status == 0) {
+    result.type = TIMEOUT;
+    return result;
+  }
+
+  if (status == PCAP_ERROR) {
+    result.type = INPUT_ERROR;
+    return result;
+  }
 
   return result;
 }

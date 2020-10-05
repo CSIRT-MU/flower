@@ -72,18 +72,13 @@ static auto cli = (
 
 void parse_args(int argc, char** argv) {
   if (!parse(argc, argv, cli)) {
-    std::cout << "Invalid input\n";
-    std::cout << "USAGE:\n";
-    std::cout << usage_lines(cli, argv[0]) << '\n';
-    return;
+    std::printf("Invalid input!\n");
+    mode = Mode::PRINT_HELP;
   }
+}
 
-  if (mode == Mode::PRINT_HELP) {
-    std::cout << make_man_page(cli, argv[0]) << '\n';
-  } else if (mode == Mode::PRINT_VERSION) {
-    std::cout << "version 0.1\n";
-  } else if (mode == Mode::PRINT_CONFIG) {
-  }
+void print_help(const char* app_name) {
+  std::cout << make_man_page(cli, app_name) << '\n';
 }
 
 void load_file(const std::string& path) {

@@ -14,10 +14,10 @@ Cache::insert(Digest digest, Chain chain, Timestamp timestamp) {
     auto& props = search->second.first;
 
     props.count += 1;
-    if (props.first_timestamp > timestamp) {
+    if (tsgeq(props.first_timestamp, timestamp)) {
       props.first_timestamp = timestamp;
     }
-    if (props.last_timestamp < timestamp) {
+    if (tsgeq(timestamp, props.last_timestamp)) {
       props.last_timestamp = timestamp;
     }
 

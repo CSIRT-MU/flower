@@ -9,11 +9,13 @@
 
 namespace Flow {
 
-Serializer::Serializer(Flow::Definition def) : _def(def) {}
+void Serializer::set_definition(Flow::Definition def) {
+  _def = def;
+}
 
 // BEGIN DIGEST
 [[nodiscard]] std::size_t Serializer::digest(const IP& ip) const {
-  auto result = 0ul;
+  auto result = ttou(ip.type());
 
   if (_def.ip.src)
     result = combine(result, ip.src);
@@ -25,7 +27,7 @@ Serializer::Serializer(Flow::Definition def) : _def(def) {}
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const TCP& tcp) const {
-  auto result = 0ul;
+  auto result = ttou(tcp.type());
 
   if (_def.tcp.src)
     result = combine(result, tcp.src);
@@ -37,7 +39,7 @@ Serializer::Serializer(Flow::Definition def) : _def(def) {}
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const UDP& udp) const {
-  auto result = 0ul;
+  auto result = ttou(udp.type());
 
   if (_def.udp.src)
     result = combine(result, udp.src);
@@ -49,7 +51,7 @@ Serializer::Serializer(Flow::Definition def) : _def(def) {}
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const DOT1Q& dot1q) const {
-  auto result = 0ul;
+  auto result = ttou(dot1q.type());
 
   if (_def.dot1q.id)
     result = combine(result, dot1q.id);
@@ -321,11 +323,11 @@ Serializer::BufferType Serializer::values(const Properties& properties) const {
   auto p = reinterpret_cast<const std::byte*>(&count);
   std::copy_n(p, sizeof(count), bkit);
 
-  auto first_timestamp = htonl(properties.first_timestamp);
+  auto first_timestamp = htonl(properties.first_timestamp.tv_sec);
   p = reinterpret_cast<const std::byte*>(&first_timestamp);
   std::copy_n(p, sizeof(first_timestamp), bkit);
 
-  auto last_timestamp = htonl(properties.last_timestamp);
+  auto last_timestamp = htonl(properties.last_timestamp.tv_sec);
   p = reinterpret_cast<const std::byte*>(&last_timestamp);
   std::copy_n(p, sizeof(last_timestamp), bkit);
 
