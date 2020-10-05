@@ -101,6 +101,17 @@ void load_file(const std::string& path) {
     definition.ip.process = false;
   }
 
+  // IPv6 values
+  if (file.contains("ipv6")) {
+    auto ipv6 = toml::find(file, "ipv6");
+    auto& ipv6_def = definition.ipv6;
+    ipv6_def.process = true;
+    ipv6_def.src = toml::find_or(ipv6, "src", ipv6_def.src);
+    ipv6_def.dst = toml::find_or(ipv6, "dst", ipv6_def.dst);
+  } else {
+    definition.ipv6.process = false;
+  }
+
   // TCP values
   if (file.contains("tcp")) {
     auto tcp = toml::find(file, "tcp");

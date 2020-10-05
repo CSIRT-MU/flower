@@ -4,6 +4,7 @@
 #include <ctime>
 #include <variant>
 #include <vector>
+#include <array>
 
 #include <common.hpp>
 
@@ -17,6 +18,8 @@ static constexpr auto IPFIX_PACKET_DELTA_COUNT = 2;
 static constexpr auto IPFIX_PROTOCOL_IDENTIFIER = 4;
 static constexpr auto IPFIX_SRC_IP4_ADDR = 8;
 static constexpr auto IPFIX_DST_IP4_ADDR = 12;
+static constexpr auto IPFIX_SRC_IP6_ADDR = 27;
+static constexpr auto IPFIX_DST_IP6_ADDR = 28;
 static constexpr auto IPFIX_SRC_PORT = 7;
 static constexpr auto IPFIX_DST_PORT = 11;
 static constexpr auto IPFIX_VLAN_ID = 58;
@@ -29,6 +32,7 @@ static constexpr auto IPFIX_FLOW_END_MILLISECONDS = 153;
 static constexpr auto IPFIX_FLOW_END_REASON = 136;
 
 static constexpr auto IPFIX_PROTOCOL_IP = 4;
+static constexpr auto IPFIX_PROTOCOL_IPV6 = 41;
 static constexpr auto IPFIX_PROTOCOL_TCP = 6;
 static constexpr auto IPFIX_PROTOCOL_UDP = 17;
 static constexpr auto IPFIX_PROTOCOL_DOT1Q = 144; // TODO(dudoslav): Change
@@ -36,6 +40,7 @@ static constexpr auto IPFIX_PROTOCOL_DOT1Q = 144; // TODO(dudoslav): Change
 // https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
 enum class Type: short {
   IP = IPFIX_PROTOCOL_IP,
+  IPV6 = IPFIX_PROTOCOL_IPV6,
   TCP = IPFIX_PROTOCOL_TCP,
   UDP = IPFIX_PROTOCOL_UDP,
   DOT1Q = IPFIX_PROTOCOL_DOT1Q
@@ -60,6 +65,15 @@ struct IP {
 
   [[nodiscard]] static Type type() {
     return Type::IP;
+  }
+};
+
+struct IPv6 {
+  std::array<std::byte, 16> src;
+  std::array<std::byte, 16> dst;
+
+  [[nodiscard]] static Type type() {
+    return Type::IPV6;
   }
 };
 
@@ -89,7 +103,7 @@ struct DOT1Q {
   }
 };
 
-using Protocol = std::variant<IP, TCP, UDP, DOT1Q>;
+using Protocol = std::variant<IP, IPv6, TCP, UDP, DOT1Q>;
 using Chain = std::vector<Protocol>;
 using Record = std::pair<Properties, Chain>;
 

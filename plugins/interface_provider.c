@@ -20,7 +20,6 @@ InitRT init(const char *arg) {
   handle = pcap_open_live(arg, BUFSIZ, 1, 1000, errbuf);
 
   if (handle) {
-    pcap_set_timeout(handle, 1000);
     return result;
   } else {
     result.type = ERROR;

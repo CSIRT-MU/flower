@@ -37,12 +37,23 @@ static Flow::Chain reduce_packet(const Tins::EthernetII &packet) {
 
   for (const auto &pdu : pdu_range) {
     switch (pdu.pdu_type()) {
-    /* IP */
+    /* IPv4 */
     case Tins::PDU::PDUType::IP: {
       if (!Options::definition.ip.process)
         continue;
       const auto &ip = static_cast<const Tins::IP &>(pdu);
       chain.emplace_back(Flow::IP{ip.src_addr(), ip.dst_addr()});
+    } break;
+
+    /* IPv6 */
+    case Tins::PDU::PDUType::IPv6: {
+      if (!Options::definition.ipv6.process)
+        continue;
+      const auto &ipv6 = static_cast<const Tins::IPv6 &>(pdu);
+      auto protocol = Flow::IPv6{};
+      ipv6.src_addr().copy((std::array<unsigned char, 16>::iterator)protocol.src.begin());
+      ipv6.dst_addr().copy((std::array<unsigned char, 16>::iterator)protocol.dst.begin());
+      chain.emplace_back(std::move(protocol));
     } break;
 
     /* TCP */
@@ -108,7 +119,7 @@ static void idle_timeout_check(Exporter &exporter, timeval ts,
   auto it = cache.find(peek_digest);
 
   Log::debug("Checking %lu records for idle timeout\n", peek_interval);
-  for (std::size_t i = 0; i < peek_interval; ++i) {
+  for (std::size_t i = 0; i < peek_interval; ++i, ++it) {
     /* If cache is empty */
     if (cache.begin() == cache.end())
       break;
@@ -169,7 +180,13 @@ static void processor_loop(Plugins::Input input, Exporter &exporter) {
     old = now;
 
     auto &raw = input_result.packet;
-    auto packet = Tins::EthernetII{raw.data, raw.caplen};
+    auto packet = Tins::EthernetII{};
+    try {
+      packet = Tins::EthernetII{raw.data, raw.caplen};
+    } catch (const std::exception& e) {
+      Log::error("Failed to parse packet: %s\n", e.what());
+      continue;
+    }
     auto chain = reduce_packet(packet);
 
     auto raw_ts = timeval{raw.sec, raw.usec};
@@ -179,12 +196,13 @@ static void processor_loop(Plugins::Input input, Exporter &exporter) {
           *cache.insert(serializer.digest(chain), std::move(chain), raw_ts);
 
       active_timeout_check(exporter, record, raw_ts);
-
-      auto peek_interval =
-          std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
-      peek_interval = std::max(cache.size() / 1000.f * peek_interval, 1.f);
-      idle_timeout_check(exporter, raw_ts, peek_interval);
     }
+
+    std::size_t peek_interval =
+      std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+    peek_interval = cache.size() / 1000.f * peek_interval;
+    peek_interval = std::clamp(peek_interval, 1lu, cache.size());
+    idle_timeout_check(exporter, raw_ts, peek_interval);
   }
 }
 

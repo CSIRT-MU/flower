@@ -13,6 +13,12 @@ struct Definition {
     bool process = false;
     bool src = false;
     bool dst = false;
+  } ipv6;
+
+  struct {
+    bool process = false;
+    bool src = false;
+    bool dst = false;
   } tcp;
 
   struct {

@@ -26,6 +26,24 @@ void Serializer::set_definition(Flow::Definition def) {
   return result;
 }
 
+[[nodiscard]] std::size_t Serializer::digest(const IPv6& ipv6) const {
+  auto result = ttou(ipv6.type());
+
+  if (_def.ipv6.src) {
+    for (const auto& b: ipv6.src) {
+      result = combine(result, b);
+    }
+  }
+
+  if (_def.ipv6.dst) {
+    for (const auto& b: ipv6.dst) {
+      result = combine(result, b);
+    }
+  }
+
+  return result;
+}
+
 [[nodiscard]] std::size_t Serializer::digest(const TCP& tcp) const {
   auto result = ttou(tcp.type());
 
@@ -97,6 +115,32 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const IP& ip) const {
     auto f = Field{
       htons(IPFIX_DST_IP4_ADDR),
       htons(IPFIX_LONG)
+    };
+    auto fp = reinterpret_cast<std::byte*>(&f);
+    std::copy_n(fp, sizeof(f), bkit);
+  }
+
+  return result;
+}
+
+[[nodiscard]]
+Serializer::BufferType Serializer::fields([[maybe_unused]] const IPv6& ipv6) const {
+  auto result = Serializer::BufferType{};
+  auto bkit = std::back_inserter(result);
+
+  if (_def.ipv6.src) {
+    auto f = Field{
+      htons(IPFIX_SRC_IP6_ADDR),
+      htons(16)
+    };
+    auto fp = reinterpret_cast<std::byte*>(&f);
+    std::copy_n(fp, sizeof(f), bkit);
+  }
+
+  if (_def.ipv6.dst) {
+    auto f = Field{
+      htons(IPFIX_DST_IP6_ADDR),
+      htons(16)
     };
     auto fp = reinterpret_cast<std::byte*>(&f);
     std::copy_n(fp, sizeof(f), bkit);
@@ -234,6 +278,24 @@ Serializer::BufferType Serializer::values(const IP& ip) const {
   if (_def.ip.dst) {
     auto vp = reinterpret_cast<const std::byte*>(&ip.dst);
     std::copy_n(vp, sizeof(ip.dst), bkit);
+  }
+
+  return result;
+}
+
+[[nodiscard]]
+Serializer::BufferType Serializer::values(const IPv6& ipv6) const {
+  auto result = Serializer::BufferType{};
+  auto bkit = std::back_inserter(result);
+
+  if (_def.ipv6.src) {
+    auto vp = reinterpret_cast<const std::byte*>(ipv6.src.data());
+    std::copy_n(vp, ipv6.src.size(), bkit);
+  }
+
+  if (_def.ipv6.dst) {
+    auto vp = reinterpret_cast<const std::byte*>(ipv6.dst.data());
+    std::copy_n(vp, ipv6.dst.size(), bkit);
   }
 
   return result;
