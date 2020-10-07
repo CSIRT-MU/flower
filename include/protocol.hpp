@@ -25,10 +25,10 @@ static constexpr auto IPFIX_DST_PORT = 11;
 static constexpr auto IPFIX_VLAN_ID = 58;
 static constexpr auto IPFIX_FLOW_START_SECONDS = 150;
 static constexpr auto IPFIX_FLOW_END_SECONDS = 151;
+static constexpr auto IPFIX_FLOW_START_MICROSECONDS = 154;
+static constexpr auto IPFIX_FLOW_END_MICROSECONDS = 155;
 
 // TODO(dudoslav): implement these ipfix fiels
-static constexpr auto IPFIX_FLOW_START_MILLISECONDS = 152;
-static constexpr auto IPFIX_FLOW_END_MILLISECONDS = 153;
 static constexpr auto IPFIX_FLOW_END_REASON = 136;
 
 static constexpr auto IPFIX_PROTOCOL_IP = 4;

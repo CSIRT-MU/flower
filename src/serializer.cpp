@@ -248,6 +248,10 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const Properties& pro
     htons(IPFIX_FLOW_START_SECONDS),
     htons(IPFIX_LONG),
     htons(IPFIX_FLOW_END_SECONDS),
+    htons(IPFIX_LONG),
+    htons(IPFIX_FLOW_START_MICROSECONDS),
+    htons(IPFIX_LONG),
+    htons(IPFIX_FLOW_END_MICROSECONDS),
     htons(IPFIX_LONG)
   };
   auto tp = reinterpret_cast<const std::byte*>(t.data());
@@ -385,13 +389,21 @@ Serializer::BufferType Serializer::values(const Properties& properties) const {
   auto p = reinterpret_cast<const std::byte*>(&count);
   std::copy_n(p, sizeof(count), bkit);
 
-  auto first_timestamp = htonl(properties.first_timestamp.tv_sec);
-  p = reinterpret_cast<const std::byte*>(&first_timestamp);
-  std::copy_n(p, sizeof(first_timestamp), bkit);
+  auto first_timestamp_sec = htonl(properties.first_timestamp.tv_sec);
+  p = reinterpret_cast<const std::byte*>(&first_timestamp_sec);
+  std::copy_n(p, sizeof(first_timestamp_sec), bkit);
 
-  auto last_timestamp = htonl(properties.last_timestamp.tv_sec);
-  p = reinterpret_cast<const std::byte*>(&last_timestamp);
-  std::copy_n(p, sizeof(last_timestamp), bkit);
+  auto last_timestamp_sec = htonl(properties.last_timestamp.tv_sec);
+  p = reinterpret_cast<const std::byte*>(&last_timestamp_sec);
+  std::copy_n(p, sizeof(last_timestamp_sec), bkit);
+
+  auto first_timestamp_usec = htonl(properties.first_timestamp.tv_usec);
+  p = reinterpret_cast<const std::byte*>(&first_timestamp_usec);
+  std::copy_n(p, sizeof(first_timestamp_usec), bkit);
+
+  auto last_timestamp_usec = htonl(properties.last_timestamp.tv_usec);
+  p = reinterpret_cast<const std::byte*>(&last_timestamp_usec);
+  std::copy_n(p, sizeof(last_timestamp_usec), bkit);
 
   return result;
 }
