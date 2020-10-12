@@ -49,17 +49,18 @@ static auto mode_print_config = "Prints current program configuration"
 
 static auto logging_flags = "Logging options:"
   % (
-      option("-d", "--debug")([](){ Log::set_level(Log::Level::DEBUG); })
+      option("--debug")([](){ Log::set_level(Log::Level::DEBUG); })
       % "Set log level to debug",
-      option("-i", "--info")([](){ Log::set_level(Log::Level::INFO); })
+      option("--info")([](){ Log::set_level(Log::Level::INFO); })
       % "Set log level to info",
-      option("-w", "--warn")([](){ Log::set_level(Log::Level::WARN); })
+      option("--warn")([](){ Log::set_level(Log::Level::WARN); })
       % "Set log level to info",
-      option("-e", "--error")([](){ Log::set_level(Log::Level::ERROR); })
+      option("--error")([](){ Log::set_level(Log::Level::ERROR); })
       % "Set log level to info"
     );
 
 static auto cli = (
+    logging_flags,
     mode_process
     | mode_print_plugins
     | mode_print_config
@@ -67,7 +68,6 @@ static auto cli = (
     % "Print this help"
     | (command("-v", "--version") >> set(mode, Mode::PRINT_VERSION))
     % "Prints version"
-    , logging_flags
     );
 
 void parse_args(int argc, char** argv) {
@@ -142,6 +142,16 @@ void load_file(const std::string& path) {
     vlan_def.id = toml::find_or(vlan, "id", vlan_def.id);
   } else {
     definition.dot1q.process = false;
+  }
+
+  // MPLS values
+  if (file.contains("mpls")) {
+    auto mpls = toml::find(file, "mpls");
+    auto& mpls_def = definition.mpls;
+    mpls_def.process = true;
+    mpls_def.label = toml::find_or(mpls, "label", mpls_def.label);
+  } else {
+    definition.mpls.process = false;
   }
 }
 

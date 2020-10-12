@@ -31,6 +31,11 @@ struct Definition {
     bool process = false;
     bool id = false;
   } dot1q;
+
+  struct {
+    bool process = false;
+    bool label = false;
+  } mpls;
 };
 
 } // namespace Flow

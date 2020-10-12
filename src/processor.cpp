@@ -51,8 +51,8 @@ static Flow::Chain reduce_packet(const Tins::EthernetII &packet) {
         continue;
       const auto &ipv6 = static_cast<const Tins::IPv6 &>(pdu);
       auto protocol = Flow::IPv6{};
-      ipv6.src_addr().copy((std::array<unsigned char, 16>::iterator)protocol.src.begin());
-      ipv6.dst_addr().copy((std::array<unsigned char, 16>::iterator)protocol.dst.begin());
+      ipv6.src_addr().copy(reinterpret_cast<std::array<unsigned char, 16>::iterator>(protocol.src.begin()));
+      ipv6.dst_addr().copy(reinterpret_cast<std::array<unsigned char, 16>::iterator>(protocol.dst.begin()));
       chain.emplace_back(std::move(protocol));
     } break;
 
@@ -78,6 +78,14 @@ static Flow::Chain reduce_packet(const Tins::EthernetII &packet) {
         continue;
       const auto &dot1q = static_cast<const Tins::Dot1Q &>(pdu);
       chain.emplace_back(Flow::DOT1Q{dot1q.id()});
+    } break;
+
+    /* MPLS */
+    case Tins::PDU::PDUType::MPLS: {
+      if (!Options::definition.mpls.process)
+        continue;
+      const auto &mpls = static_cast<const Tins::MPLS &>(pdu);
+      chain.emplace_back(Flow::MPLS{mpls.label()});
     } break;
     }
   }
