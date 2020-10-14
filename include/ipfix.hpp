@@ -24,6 +24,7 @@ static constexpr std::uint16_t FIELD_DST_IP6_ADDR = 28;
 static constexpr std::uint16_t FIELD_SRC_PORT = 7;
 static constexpr std::uint16_t FIELD_DST_PORT = 11;
 static constexpr std::uint16_t FIELD_VLAN_ID = 58;
+static constexpr std::uint16_t FIELD_IP_VERSION = 60;
 static constexpr std::uint16_t FIELD_FLOW_START_SECONDS = 150;
 static constexpr std::uint16_t FIELD_FLOW_END_SECONDS = 151;
 static constexpr std::uint16_t FIELD_FLOW_START_MILLISECONDS = 152;
@@ -34,23 +35,22 @@ static constexpr std::uint16_t FIELD_LAYER2_SEGEMENT_ID = 351;
 
 /* Protocol identifiers */
 /* https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml */
-static constexpr std::uint8_t PROTOCOL_IP = 4;
-static constexpr std::uint8_t PROTOCOL_IPV6 = 41;
 static constexpr std::uint8_t PROTOCOL_TCP = 6;
 static constexpr std::uint8_t PROTOCOL_UDP = 17;
 static constexpr std::uint8_t PROTOCOL_MPLS = 137;
-static constexpr std::uint8_t PROTOCOL_DOT1Q = 144; // TODO(dudoslav): Change
-static constexpr std::uint8_t PROTOCOL_VXLAN = 145; // TODO(dudoslav): Change
+
+static constexpr std::uint8_t VERSION_IPV4 = 4;
+static constexpr std::uint8_t VERSION_IPV6 = 6;
 
 /* IPFIX type enum */
 enum class Type : std::uint8_t {
-  IP = PROTOCOL_IP,
-  IPV6 = PROTOCOL_IPV6,
+  IP,
+  IPV6,
   TCP = PROTOCOL_TCP,
   UDP = PROTOCOL_UDP,
-  DOT1Q = PROTOCOL_DOT1Q,
+  DOT1Q,
   MPLS = PROTOCOL_MPLS,
-  VXLAN = PROTOCOL_VXLAN
+  VXLAN 
 };
 
 /* Cast from Type to uint8_t */

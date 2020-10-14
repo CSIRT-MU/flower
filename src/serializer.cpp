@@ -152,6 +152,13 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const IP& ip) const {
     std::copy_n(fp, sizeof(f), bkit);
   }
 
+  auto f = Field{
+    htons(IPFIX::FIELD_IP_VERSION),
+    htons(IPFIX::TYPE_8)
+  };
+  auto fp = reinterpret_cast<std::byte*>(&f);
+  std::copy_n(fp, sizeof(f), bkit);
+
   return result;
 }
 
@@ -177,6 +184,13 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const IPv6& ipv6) con
     auto fp = reinterpret_cast<std::byte*>(&f);
     std::copy_n(fp, sizeof(f), bkit);
   }
+
+  auto f = Field{
+    htons(IPFIX::FIELD_IP_VERSION),
+    htons(IPFIX::TYPE_8)
+  };
+  auto fp = reinterpret_cast<std::byte*>(&f);
+  std::copy_n(fp, sizeof(f), bkit);
 
   return result;
 }
@@ -204,6 +218,13 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const TCP& tcp) const
     std::copy_n(fp, sizeof(f), bkit);
   }
 
+  auto f = Field{
+    htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER),
+    htons(IPFIX::TYPE_8)
+  };
+  auto fp = reinterpret_cast<std::byte*>(&f);
+  std::copy_n(fp, sizeof(f), bkit);
+
   return result;
 }
 
@@ -229,6 +250,13 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const UDP& udp) const
     auto fp = reinterpret_cast<std::byte*>(&f);
     std::copy_n(fp, sizeof(f), bkit);
   }
+
+  auto f = Field{
+    htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER),
+    htons(IPFIX::TYPE_8)
+  };
+  auto fp = reinterpret_cast<std::byte*>(&f);
+  std::copy_n(fp, sizeof(f), bkit);
 
   return result;
 }
@@ -264,6 +292,13 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const DOT1Q& dot1q) c
     std::copy_n(fp, sizeof(f), bkit);
   }
 
+  auto f = Field{
+    htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER),
+    htons(IPFIX::TYPE_8)
+  };
+  auto fp = reinterpret_cast<std::byte*>(&f);
+  std::copy_n(fp, sizeof(f), bkit);
+
   return result;
 }
 
@@ -291,13 +326,6 @@ Serializer::BufferType Serializer::fields(const Chain& chain) const {
   for (const auto& protocol: chain) {
     auto fs = std::visit([&](const auto& p){
         return fields(p); }, protocol);
-
-    auto f = Field{
-      htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER),
-      htons(IPFIX::TYPE_8)
-    };
-    auto fp = reinterpret_cast<std::byte*>(&f);
-    std::copy_n(fp, sizeof(f), std::back_inserter(fs));
 
     std::copy(fs.begin(), fs.end(), bkit);
   }
@@ -349,6 +377,10 @@ Serializer::BufferType Serializer::values(const IP& ip) const {
     std::copy_n(vp, IPFIX::TYPE_IPV4, bkit);
   }
 
+  uint8_t version = IPFIX::VERSION_IPV4;
+  auto vp = reinterpret_cast<const std::byte*>(&version);
+  std::copy_n(vp, IPFIX::TYPE_8, bkit);
+
   return result;
 }
 
@@ -366,6 +398,10 @@ Serializer::BufferType Serializer::values(const IPv6& ipv6) const {
     auto vp = reinterpret_cast<const std::byte*>(ipv6.dst.data());
     std::copy_n(vp, IPFIX::TYPE_IPV6, bkit);
   }
+
+  uint8_t version = IPFIX::VERSION_IPV6;
+  auto vp = reinterpret_cast<const std::byte*>(&version);
+  std::copy_n(vp, IPFIX::TYPE_8, bkit);
 
   return result;
 }
@@ -387,6 +423,10 @@ Serializer::BufferType Serializer::values(const TCP& tcp) const {
     std::copy_n(vp, IPFIX::TYPE_16, bkit);
   }
 
+  uint8_t protocol = IPFIX::PROTOCOL_TCP;
+  auto vp = reinterpret_cast<const std::byte*>(&protocol);
+  std::copy_n(vp, IPFIX::TYPE_8, bkit);
+
   return result;
 }
 
@@ -406,6 +446,10 @@ Serializer::BufferType Serializer::values(const UDP& udp) const {
     auto vp = reinterpret_cast<const std::byte*>(&dst);
     std::copy_n(vp, IPFIX::TYPE_16, bkit);
   }
+
+  uint8_t protocol = IPFIX::PROTOCOL_UDP;
+  auto vp = reinterpret_cast<const std::byte*>(&protocol);
+  std::copy_n(vp, IPFIX::TYPE_8, bkit);
 
   return result;
 }
@@ -436,6 +480,10 @@ Serializer::BufferType Serializer::values(const MPLS& mpls) const {
     std::copy_n(vp, IPFIX::TYPE_16, bkit);
   }
 
+  uint8_t protocol = IPFIX::PROTOCOL_MPLS;
+  auto vp = reinterpret_cast<const std::byte*>(&protocol);
+  std::copy_n(vp, IPFIX::TYPE_8, bkit);
+
   return result;
 }
 
@@ -444,7 +492,6 @@ Serializer::BufferType Serializer::values(const VXLAN& vxlan) const {
   auto result = Serializer::BufferType{};
   auto bkit = std::back_inserter(result);
 
-  // TODO(dudoslav): finish
   if (_def.vxlan.vni) {
     uint64_t segment_id = (uint64_t{0x01} << 56) + vxlan.vni;
     segment_id = htonT(segment_id);
@@ -463,12 +510,6 @@ Serializer::BufferType Serializer::values(const Chain& chain) const {
   for (const auto& protocol: chain) {
     auto vs = std::visit([&](const auto& p){
         return values(p); }, protocol);
-
-    auto type = std::visit([](const auto&p){
-        return p.type(); }, protocol);
-    auto ntype = IPFIX::ttou(type);
-    auto tp = reinterpret_cast<std::byte*>(&ntype);
-    std::copy_n(tp, IPFIX::TYPE_8, std::back_inserter(vs));
 
     std::copy(vs.begin(), vs.end(), bkit);
   }
