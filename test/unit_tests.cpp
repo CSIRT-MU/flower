@@ -51,6 +51,26 @@ TEST(Digest, NonCommutative) {
   ASSERT_NE(ser.digest(r1), ser.digest(r2));
 }
 
+TEST(Digest, ComplexChainsDifferent) {
+  using namespace Flow;
+  auto ser = Serializer();
+  ser.set_definition(def_all);
+
+  auto r1 = Chain{};
+  auto r2 = Chain{};
+
+  r1.push_back(IP{0xA0B00101, 0xA0B00102});
+  r2.push_back(IP{0xA0B00102, 0xA0B00101});
+
+  r1.push_back(VXLAN{0x7B});
+  r2.push_back(VXLAN{0x7B});
+
+  r1.push_back(IP{0x0A000001, 0x0A000002});
+  r2.push_back(IP{0x0A000002, 0x0A000001});
+
+  ASSERT_NE(ser.digest(r1), ser.digest(r2));
+}
+
 TEST(Digest, Record) {
   using namespace Flow;
   auto ser = Serializer();

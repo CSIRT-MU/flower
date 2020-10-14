@@ -36,6 +36,11 @@ struct Definition {
     bool process = false;
     bool label = false;
   } mpls;
+
+  struct {
+    bool process = false;
+    bool vni = false;
+  } vxlan;
 };
 
 } // namespace Flow

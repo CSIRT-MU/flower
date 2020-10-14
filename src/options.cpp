@@ -153,6 +153,16 @@ void load_file(const std::string& path) {
   } else {
     definition.mpls.process = false;
   }
+
+  // VXLAN values
+  if (file.contains("vxlan")) {
+    auto vxlan = toml::find(file, "vxlan");
+    auto& vxlan_def = definition.vxlan;
+    vxlan_def.process = true;
+    vxlan_def.vni = toml::find_or(vxlan, "vni", vxlan_def.vni);
+  } else {
+    definition.vxlan.process = false;
+  }
 }
 
 }

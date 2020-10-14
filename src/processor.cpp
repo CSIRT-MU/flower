@@ -14,6 +14,8 @@
 
 namespace Flow {
 
+static constexpr auto VXLAN_PORT = 4789;
+
 static Cache cache;
 static Serializer serializer;
 
@@ -29,7 +31,7 @@ static void on_signal(int) {
   running = false;
 }
 
-static Flow::Chain reduce_packet(const Tins::EthernetII &packet) {
+static Flow::Chain reduce_packet(const Tins::PDU &packet) {
   auto chain = Flow::Chain{};
   auto pdu_range = Tins::iterate_pdus(packet);
   // Small optimization if needed
@@ -64,12 +66,32 @@ static Flow::Chain reduce_packet(const Tins::EthernetII &packet) {
       chain.emplace_back(Flow::TCP{tcp.sport(), tcp.dport()});
     } break;
 
-    /* UDP */
+    /* UDP and VXLAN */
     case Tins::PDU::PDUType::UDP: {
-      if (!Options::definition.udp.process)
-        continue;
       const auto &udp = static_cast<const Tins::UDP &>(pdu);
-      chain.emplace_back(Flow::UDP{udp.sport(), udp.dport()});
+      if (udp.dport() == VXLAN_PORT) {
+        /* Get inner VXLAN payload */
+        auto& raw = udp.rfind_pdu<Tins::RawPDU>();
+
+        if (Options::definition.vxlan.process) {
+          /* Parse VXLAN header */
+          auto vxlan = Flow::VXLAN{0};
+          std::memcpy(&vxlan.vni, raw.payload().data() + 4, 4);
+          vxlan.vni = ntohl(vxlan.vni) >> 8;
+          chain.emplace_back(std::move(vxlan));
+        }
+
+        /* Parse VXLAN payload */
+        auto inner = Tins::EthernetII{
+          raw.payload().data() + 8, raw.payload_size() - 8};
+        auto inner_chain = reduce_packet(inner);
+        chain.insert(chain.end(), inner_chain.begin(), inner_chain.end());
+        return chain;
+      } else {
+        if (!Options::definition.udp.process)
+          continue;
+        chain.emplace_back(Flow::UDP{udp.sport(), udp.dport()});
+      }
     } break;
 
     /* DOT1Q / VLAN */

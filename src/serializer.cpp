@@ -29,7 +29,7 @@ void Serializer::set_definition(Flow::Definition def) {
 
 // BEGIN DIGEST
 [[nodiscard]] std::size_t Serializer::digest(const IP& ip) const {
-  auto result = IPFIX::ttou(ip.type());
+  std::size_t result = IPFIX::ttou(ip.type());
 
   if (_def.ip.src)
     result = combine(result, ip.src);
@@ -41,7 +41,7 @@ void Serializer::set_definition(Flow::Definition def) {
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const IPv6& ipv6) const {
-  auto result = IPFIX::ttou(ipv6.type());
+  std::size_t result = IPFIX::ttou(ipv6.type());
 
   if (_def.ipv6.src) {
     for (const auto& b: ipv6.src) {
@@ -59,7 +59,7 @@ void Serializer::set_definition(Flow::Definition def) {
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const TCP& tcp) const {
-  auto result = IPFIX::ttou(tcp.type());
+  std::size_t result = IPFIX::ttou(tcp.type());
 
   if (_def.tcp.src)
     result = combine(result, tcp.src);
@@ -71,7 +71,7 @@ void Serializer::set_definition(Flow::Definition def) {
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const UDP& udp) const {
-  auto result = IPFIX::ttou(udp.type());
+  std::size_t result = IPFIX::ttou(udp.type());
 
   if (_def.udp.src)
     result = combine(result, udp.src);
@@ -83,7 +83,7 @@ void Serializer::set_definition(Flow::Definition def) {
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const DOT1Q& dot1q) const {
-  auto result = IPFIX::ttou(dot1q.type());
+  std::size_t result = IPFIX::ttou(dot1q.type());
 
   if (_def.dot1q.id)
     result = combine(result, dot1q.id);
@@ -92,7 +92,7 @@ void Serializer::set_definition(Flow::Definition def) {
 }
 
 [[nodiscard]] std::size_t Serializer::digest(const MPLS& mpls) const {
-  auto result = IPFIX::ttou(mpls.type());
+  std::size_t result = IPFIX::ttou(mpls.type());
 
   if (_def.mpls.label)
     result = combine(result, mpls.label);
@@ -100,8 +100,17 @@ void Serializer::set_definition(Flow::Definition def) {
   return result;
 }
 
+[[nodiscard]] std::size_t Serializer::digest(const VXLAN& vxlan) const {
+  std::size_t result = IPFIX::ttou(vxlan.type());
+
+  if (_def.vxlan.vni)
+    result = combine(result, vxlan.vni);
+
+  return result;
+}
+
 [[nodiscard]] std::size_t Serializer::digest(const Chain& chain) const {
-  auto result = 0ul;
+  std::size_t result = 0ul;
   
   for (const auto& protocol: chain) {
     auto hash = std::visit([&](const auto& p){
@@ -258,6 +267,22 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const DOT1Q& dot1q) c
   return result;
 }
 
+[[nodiscard]] Serializer::BufferType Serializer::fields([[maybe_unused]] const VXLAN& vxlan) const {
+  auto result = Serializer::BufferType{};
+  auto bkit = std::back_inserter(result);
+
+  if (_def.vxlan.vni) {
+    auto f = Field{
+      htons(IPFIX::FIELD_LAYER2_SEGEMENT_ID),
+      htons(IPFIX::TYPE_64)
+    };
+    auto fp = reinterpret_cast<std::byte*>(&f);
+    std::copy_n(fp, sizeof(f), bkit);
+  }
+
+  return result;
+}
+
 [[nodiscard]]
 Serializer::BufferType Serializer::fields(const Chain& chain) const {
   auto result = Serializer::BufferType{};
@@ -289,10 +314,10 @@ Serializer::BufferType Serializer::fields([[maybe_unused]] const Properties& pro
     htons(IPFIX::TYPE_SECONDS),
     htons(IPFIX::FIELD_FLOW_END_SECONDS),
     htons(IPFIX::TYPE_SECONDS),
-    htons(IPFIX::FIELD_FLOW_START_MICROSECONDS),
-    htons(IPFIX::TYPE_MICROSECONDS),
-    htons(IPFIX::FIELD_FLOW_END_MICROSECONDS),
-    htons(IPFIX::TYPE_MICROSECONDS)
+    htons(IPFIX::FIELD_FLOW_START_MILLISECONDS),
+    htons(IPFIX::TYPE_MILLISECONDS),
+    htons(IPFIX::FIELD_FLOW_END_MILLISECONDS),
+    htons(IPFIX::TYPE_MILLISECONDS)
   };
   auto tp = reinterpret_cast<const std::byte*>(t.data());
 
@@ -404,10 +429,27 @@ Serializer::BufferType Serializer::values(const MPLS& mpls) const {
   auto result = Serializer::BufferType{};
   auto bkit = std::back_inserter(result);
 
+  // TODO(dudoslav): finish
   if (_def.mpls.label) {
     auto id = htons(mpls.label);
     auto vp = reinterpret_cast<const std::byte*>(&id);
     std::copy_n(vp, IPFIX::TYPE_16, bkit);
+  }
+
+  return result;
+}
+
+[[nodiscard]]
+Serializer::BufferType Serializer::values(const VXLAN& vxlan) const {
+  auto result = Serializer::BufferType{};
+  auto bkit = std::back_inserter(result);
+
+  // TODO(dudoslav): finish
+  if (_def.vxlan.vni) {
+    uint64_t segment_id = (uint64_t{0x01} << 56) + vxlan.vni;
+    segment_id = htonT(segment_id);
+    auto vp = reinterpret_cast<const std::byte*>(&segment_id);
+    std::copy_n(vp, IPFIX::TYPE_64, bkit);
   }
 
   return result;
@@ -443,22 +485,25 @@ Serializer::BufferType Serializer::values(const Properties& properties) const {
   auto p = reinterpret_cast<const std::byte*>(&count);
   std::copy_n(p, IPFIX::TYPE_64, bkit);
 
-  std::uint64_t first_timestamp_sec = htonl(properties.first_timestamp.tv_sec);
+  std::uint32_t first_timestamp_sec = htonl(properties.first_timestamp.tv_sec);
   p = reinterpret_cast<const std::byte*>(&first_timestamp_sec);
   std::copy_n(p, IPFIX::TYPE_SECONDS, bkit);
 
-  std::uint64_t last_timestamp_sec = htonl(properties.last_timestamp.tv_sec);
+  std::uint32_t last_timestamp_sec = htonl(properties.last_timestamp.tv_sec);
   p = reinterpret_cast<const std::byte*>(&last_timestamp_sec);
   std::copy_n(p, IPFIX::TYPE_SECONDS, bkit);
 
-  std::uint64_t first_timestamp_usec = htonl(properties.first_timestamp.tv_usec);
-  first_timestamp_usec = (first_timestamp_sec << 32) | first_timestamp_usec;
-  p = reinterpret_cast<const std::byte*>(&first_timestamp_usec);
-  std::copy_n(p, IPFIX::TYPE_MICROSECONDS, bkit);
+  std::uint64_t first_timestamp_msec = htonT(
+      properties.first_timestamp.tv_sec * 1000
+      + properties.first_timestamp.tv_usec / 1000);
+  p = reinterpret_cast<const std::byte*>(&first_timestamp_msec);
+  std::copy_n(p, IPFIX::TYPE_MILLISECONDS, bkit);
 
-  std::uint64_t last_timestamp_usec = htonl(properties.last_timestamp.tv_usec);
-  p = reinterpret_cast<const std::byte*>(&last_timestamp_usec);
-  std::copy_n(p, IPFIX::TYPE_MICROSECONDS, bkit);
+  std::uint64_t last_timestamp_msec = htonT(
+      properties.last_timestamp.tv_sec * 1000
+      + properties.last_timestamp.tv_usec / 1000);
+  p = reinterpret_cast<const std::byte*>(&last_timestamp_msec);
+  std::copy_n(p, IPFIX::TYPE_MILLISECONDS, bkit);
 
   return result;
 }

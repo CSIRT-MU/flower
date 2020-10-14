@@ -72,7 +72,15 @@ struct MPLS {
   }
 };
 
-using Protocol = std::variant<IP, IPv6, TCP, UDP, DOT1Q, MPLS>;
+struct VXLAN {
+  uint32_t vni;
+
+  [[nodiscard]] static IPFIX::Type type() {
+    return IPFIX::Type::VXLAN;
+  }
+};
+
+using Protocol = std::variant<IP, IPv6, TCP, UDP, DOT1Q, MPLS, VXLAN>;
 using Chain = std::vector<Protocol>;
 using Record = std::pair<Properties, Chain>;
 
@@ -80,12 +88,17 @@ using Record = std::pair<Properties, Chain>;
   return f.tv_sec == s.tv_sec ? f.tv_usec > s.tv_usec : f.tv_sec > s.tv_sec;
 }
 
+[[nodiscard]] inline std::size_t type(const Protocol& protocol) {
+  return std::visit([](const auto& p){
+      return ttou(p.type()); }, protocol);
+}
+
 [[nodiscard]] inline std::size_t type(const Chain& chain) {
   auto result = 0ul;
 
   for (const auto& protocol: chain) {
     auto type = std::visit([](const auto& p){
-        return p.type(); }, protocol);
+        return ttou(p.type()); }, protocol);
 
     result = combine(result, type);
   }
