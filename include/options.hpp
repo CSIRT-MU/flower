@@ -6,6 +6,8 @@
 
 namespace Options {
 
+static constexpr auto SYSTEM_PLUGINS_DIR = "/var/flower/plugins";
+
 enum class Mode {
   PRINT_PLUGINS,
   PRINT_CONFIG,
@@ -17,8 +19,8 @@ enum class Mode {
 // OPTIONS
 extern Mode mode;
 extern std::string argument;
+extern std::string plugins_dir;
 extern std::string input_plugin;
-extern unsigned int export_interval;
 extern unsigned int active_timeout;
 extern unsigned int idle_timeout;
 extern std::string ip_address;

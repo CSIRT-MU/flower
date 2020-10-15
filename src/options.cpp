@@ -12,8 +12,8 @@ namespace Options {
 // OPTIONS
 Mode mode = Mode::PRINT_HELP;
 std::string argument = "";
+std::string plugins_dir = "./plugins";
 std::string input_plugin = "FileInput";
-unsigned int export_interval = 4;
 unsigned int active_timeout = 600;
 unsigned int idle_timeout = 300;
 std::string ip_address = "127.0.0.1";
@@ -29,12 +29,10 @@ static auto mode_process = "Process options:"
       % "Argument plugin depends on plugin implementation",
       (option("-I", "--input_plugin") & value("plugin_name", input_plugin))
       % "Input plugin name to use [default: FileInput]",
-      (option("-e", "--export_interval") & value("seconds", export_interval))
-      % "CHANGEME",
       (option("-a", "--active_timeout") & value("seconds", active_timeout))
-      % "CHANGEME",
+      % "Active timeout, after which the flow should be exported",
       (option("-i", "--idle_timeout") & value("seconds", idle_timeout))
-      % "CHANGEME",
+      % "Idle timeout, after which the flow should be exported",
       (option("-o", "--ip_address") & value("address", ip_address))
       % "IP address of IPFIX collector",
       (option("-p", "--port") & value("port", port))
@@ -59,8 +57,14 @@ static auto logging_flags = "Logging options:"
       % "Set log level to info"
     );
 
+static auto plugins_flags = (
+    option("--plugins_dir") & value("directory", plugins_dir)
+    % "Set plugins directory"
+    );
+
 static auto cli = (
     logging_flags,
+    plugins_flags,
     mode_process
     | mode_print_plugins
     | mode_print_config
@@ -86,7 +90,8 @@ void load_file(const std::string& path) {
 
   // Global values
   auto global = toml::find(file, "global");
-  export_interval = toml::find_or(global, "export_interval", export_interval);
+  active_timeout = toml::find_or(global, "active_timeout", active_timeout);
+  idle_timeout = toml::find_or(global, "idle_timeout", idle_timeout);
   ip_address = toml::find_or(global, "ip_address", ip_address);
   port = toml::find_or(global, "port", port);
 

@@ -1,22 +1,22 @@
 #pragma once
 
 #include <filesystem>
-#include <iostream>
 #include <string>
-#include <vector>
+#include <unordered_map>
 #include <algorithm>
 
 #include <input.hpp>
 #include <plugin.hpp>
+#include <log.hpp>
 
 namespace Plugins {
 
 class Manager {
-  std::vector<Plugin> _inputs;
+  std::unordered_map<std::string, Plugin> _inputs;
 
 public:
 
-  explicit Manager(const std::string& path) {
+  void load_from_folder(const std::string& path) {
     try {
       for (const auto& f: std::filesystem::directory_iterator(path)) {
         if (f.path().extension() == PLUGIN_EXTENSION) {
@@ -24,31 +24,28 @@ public:
             auto plugin = Plugin{f.path()};
             switch (plugin.info().type) {
               case INPUT_PLUGIN:
-                _inputs.emplace_back(std::move(plugin));
+                _inputs.emplace(plugin.info().name, std::move(plugin));
                 break;
             }
           } catch (const std::runtime_error& e) {
-            std::cerr << "Failed to load plugin: " << e.what() << std::endl;
+            Log::error("Failed to load plugin: %s\n", e.what());
           }
         }
       }
     } catch (const std::filesystem::filesystem_error& e) {
-      std::cerr << "Failed to traverse plugin directory: " << e.what() << std::endl;
+      Log::error("Plugins directory failure %s\n", e.what());
     }
   }
 
   // TODO(dudoslav): Moved plugin must be cleaned
   Input create_input(const std::string& name, const char* arg) {
-    auto search = std::find_if(_inputs.begin(), _inputs.end(),
-        [&name](const auto& plugin){
-        return plugin.info().name == name;
-        });
+    auto search = _inputs.find(name);
 
     if (search == _inputs.end()) {
       throw std::runtime_error{"Input plugin not found: " + name};
     }
 
-    return {std::move(*search), arg};
+    return {std::move(search->second), arg};
   }
 
   [[nodiscard]] const auto& inputs() const {

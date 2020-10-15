@@ -20,19 +20,39 @@ load_config() {
   }
 }
 
+static void
+init_plugin_manager(Plugins::Manager& manager, const std::string& path) {
+  namespace fs = std::filesystem;
+
+  if (fs::is_directory(Options::SYSTEM_PLUGINS_DIR)) {
+    Log::info("Loading plugins from %s\n", Options::SYSTEM_PLUGINS_DIR);
+    manager.load_from_folder(Options::SYSTEM_PLUGINS_DIR);
+  }
+
+  if (fs::is_directory(path)) {
+    Log::info("Loading plugins from %s\n", path.c_str());
+    manager.load_from_folder(path);
+  }
+}
+
 int
 main(int argc, char **argv) {
   load_config();
   Options::parse_args(argc, argv);
 
-  auto plugin_manager = Plugins::Manager{"plugins"};
+  auto plugin_manager = Plugins::Manager{};
+  init_plugin_manager(plugin_manager, Options::plugins_dir);
 
   switch (Options::mode) {
   /* List plugins */
   case Options::Mode::PRINT_PLUGINS:
     std::printf("Input plugins:\n");
-    for (const auto &p : plugin_manager.inputs()) {
-      std::printf("\t%s\n", p.info().name);
+    for (const auto &[_, p] : plugin_manager.inputs()) {
+      std::printf("----------------\n");
+      std::printf("%s\n", p.info().name);
+      std::printf("----------------\n");
+      std::printf("%s\n", p.info().description);
+      std::printf("\n");
     }
     break;
 
