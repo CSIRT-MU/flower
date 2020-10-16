@@ -37,6 +37,7 @@ static constexpr std::uint16_t FIELD_LAYER2_SEGEMENT_ID = 351;
 /* https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml */
 static constexpr std::uint8_t PROTOCOL_TCP = 6;
 static constexpr std::uint8_t PROTOCOL_UDP = 17;
+static constexpr std::uint8_t PROTOCOL_GRE = 47;
 static constexpr std::uint8_t PROTOCOL_MPLS = 137;
 
 static constexpr std::uint8_t VERSION_IPV4 = 4;

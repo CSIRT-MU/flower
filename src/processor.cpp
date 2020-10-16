@@ -11,6 +11,7 @@
 #include <log.hpp>
 #include <options.hpp>
 #include <serializer.hpp>
+#include <gre.hpp>
 
 namespace Flow {
 
@@ -108,6 +109,12 @@ static Flow::Chain reduce_packet(const Tins::PDU &packet) {
         continue;
       const auto &mpls = static_cast<const Tins::MPLS &>(pdu);
       chain.emplace_back(Flow::MPLS{mpls.label()});
+    } break;
+
+    /* GRE */
+    case Tins::PDU::PDUType::USER_DEFINED_PDU: {
+      const auto &gre = static_cast<const GREPDU &>(pdu);
+      Log::debug("GRE %u\n", gre.key());
     } break;
     }
   }
@@ -250,6 +257,9 @@ void start_processor(Plugins::Input input) {
   serializer.set_definition(definition);
 
   std::signal(SIGINT, on_signal);
+
+  /* Register our GRE PDU parser into tins */
+  Tins::Allocators::register_allocator<Tins::IP, GREPDU>(IPFIX::PROTOCOL_GRE);
 
   /* Start main metering process */
   processor_loop(std::move(input), exporter);
