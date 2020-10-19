@@ -1,26 +1,31 @@
 #include <processor.hpp>
 
+#include <unordered_map>
+#include <memory>
 #include <atomic>
-#include <chrono>
 #include <csignal>
 
 #include <tins/tins.h>
 
+#include <log.hpp>
+#include <common.hpp>
+#include <options.hpp>
 #include <cache.hpp>
 #include <exporter.hpp>
-#include <log.hpp>
-#include <options.hpp>
-#include <serializer.hpp>
-#include <gre.hpp>
+
+#include <protocols/vxlan.hpp>
+
+#include <flows/ip.hpp>
+#include <flows/tcp.hpp>
+#include <flows/udp.hpp>
+#include <flows/vlan.hpp>
+#include <flows/vxlan.hpp>
 
 namespace Flow {
 
-static constexpr auto VXLAN_PORT = 4789;
-
-static Cache cache;
-static Serializer serializer;
-
+static std::unordered_map<Tins::PDU::PDUType, std::unique_ptr<Flow>> reducers;
 static std::atomic<bool> running = true;
+static Cache cache;
 
 static void on_signal(int) {
   if (!running) {
@@ -32,94 +37,28 @@ static void on_signal(int) {
   running = false;
 }
 
-static Flow::Chain reduce_packet(const Tins::PDU &packet) {
-  auto chain = Flow::Chain{};
-  auto pdu_range = Tins::iterate_pdus(packet);
-  // Small optimization if needed
-  chain.reserve(std::distance(pdu_range.begin(), pdu_range.end()));
+template<typename Reducer>
+static void register_reducer(Tins::PDU::PDUType pdu_type) {
+  reducers.emplace(pdu_type, std::make_unique<Reducer>(Options::get_toml()));
+}
 
-  for (const auto &pdu : pdu_range) {
-    switch (pdu.pdu_type()) {
-    /* IPv4 */
-    case Tins::PDU::PDUType::IP: {
-      if (!Options::definition.ip.process)
-        continue;
-      const auto &ip = static_cast<const Tins::IP &>(pdu);
-      chain.emplace_back(Flow::IP{ip.src_addr(), ip.dst_addr()});
-    } break;
+static std::vector<std::byte>
+prepare_fields() {
+  static const auto t = std::array{
+    htons(IPFIX::FIELD_PACKET_DELTA_COUNT),
+    htons(IPFIX::TYPE_64),
+    htons(IPFIX::FIELD_FLOW_START_SECONDS),
+    htons(IPFIX::TYPE_SECONDS),
+    htons(IPFIX::FIELD_FLOW_END_SECONDS),
+    htons(IPFIX::TYPE_SECONDS),
+    htons(IPFIX::FIELD_FLOW_START_MILLISECONDS),
+    htons(IPFIX::TYPE_MILLISECONDS),
+    htons(IPFIX::FIELD_FLOW_END_MILLISECONDS),
+    htons(IPFIX::TYPE_MILLISECONDS)
+  };
+  auto tp = reinterpret_cast<const std::byte*>(t.data());
 
-    /* IPv6 */
-    case Tins::PDU::PDUType::IPv6: {
-      if (!Options::definition.ipv6.process)
-        continue;
-      const auto &ipv6 = static_cast<const Tins::IPv6 &>(pdu);
-      auto protocol = Flow::IPv6{};
-      ipv6.src_addr().copy(reinterpret_cast<std::array<unsigned char, 16>::iterator>(protocol.src.begin()));
-      ipv6.dst_addr().copy(reinterpret_cast<std::array<unsigned char, 16>::iterator>(protocol.dst.begin()));
-      chain.emplace_back(std::move(protocol));
-    } break;
-
-    /* TCP */
-    case Tins::PDU::PDUType::TCP: {
-      if (!Options::definition.tcp.process)
-        continue;
-      const auto &tcp = static_cast<const Tins::TCP &>(pdu);
-      chain.emplace_back(Flow::TCP{tcp.sport(), tcp.dport()});
-    } break;
-
-    /* UDP and VXLAN */
-    case Tins::PDU::PDUType::UDP: {
-      const auto &udp = static_cast<const Tins::UDP &>(pdu);
-      if (udp.dport() == VXLAN_PORT) {
-        /* Get inner VXLAN payload */
-        auto& raw = udp.rfind_pdu<Tins::RawPDU>();
-
-        if (Options::definition.vxlan.process) {
-          /* Parse VXLAN header */
-          auto vxlan = Flow::VXLAN{0};
-          std::memcpy(&vxlan.vni, raw.payload().data() + 4, 4);
-          vxlan.vni = ntohl(vxlan.vni) >> 8;
-          chain.emplace_back(std::move(vxlan));
-        }
-
-        /* Parse VXLAN payload */
-        auto inner = Tins::EthernetII{
-          raw.payload().data() + 8, raw.payload_size() - 8};
-        auto inner_chain = reduce_packet(inner);
-        chain.insert(chain.end(), inner_chain.begin(), inner_chain.end());
-        return chain;
-      } else {
-        if (!Options::definition.udp.process)
-          continue;
-        chain.emplace_back(Flow::UDP{udp.sport(), udp.dport()});
-      }
-    } break;
-
-    /* DOT1Q / VLAN */
-    case Tins::PDU::PDUType::DOT1Q: {
-      if (!Options::definition.dot1q.process)
-        continue;
-      const auto &dot1q = static_cast<const Tins::Dot1Q &>(pdu);
-      chain.emplace_back(Flow::DOT1Q{dot1q.id()});
-    } break;
-
-    /* MPLS */
-    case Tins::PDU::PDUType::MPLS: {
-      if (!Options::definition.mpls.process)
-        continue;
-      const auto &mpls = static_cast<const Tins::MPLS &>(pdu);
-      chain.emplace_back(Flow::MPLS{mpls.label()});
-    } break;
-
-    /* GRE */
-    case Tins::PDU::PDUType::USER_DEFINED_PDU: {
-      const auto &gre = static_cast<const GREPDU &>(pdu);
-      Log::debug("GRE %u\n", gre.key());
-    } break;
-    }
-  }
-
-  return chain;
+  return {tp, tp + t.size() * IPFIX::TYPE_16};
 }
 
 /**
@@ -127,21 +66,17 @@ static Flow::Chain reduce_packet(const Tins::PDU &packet) {
  * Active timeout is set in global options. If record timed out, it is exported
  * and then its counter is reset.
  */
-static void active_timeout_check(Exporter &exporter, Record &record,
+static void active_timeout_check(Exporter &exporter, Cache::Entry &entry,
                                  timeval ts) {
   const auto active_timeout = Options::active_timeout;
 
-  auto &[props, chain] = record;
-  auto diff = ts.tv_sec - props.first_timestamp.tv_sec;
-  auto type = Flow::type(chain);
+  auto& [props, type, values] = entry->second;
+  auto diff = ts.tv_sec - props.flow_start.tv_sec;
 
   if (diff >= active_timeout) {
     Log::debug("Active timeout with error %lus\n", diff - active_timeout);
 
-    if (!exporter.has_template(type)) {
-      exporter.insert_template(type, serializer.fields(chain, props));
-    }
-    exporter.insert_record(type, serializer.values(chain, props));
+    exporter.insert_record(type, props, values);
     props = {0, ts, ts};
   }
 }
@@ -164,17 +99,13 @@ static void idle_timeout_check(Exporter &exporter, timeval ts,
     if (it == cache.end())
       it = cache.begin();
 
-    auto &[props, chain] = it->second;
-    auto type = Flow::type(chain);
+    auto& [props, type, values] = it->second;
 
-    auto diff = ts.tv_sec - props.last_timestamp.tv_sec;
+    auto diff = ts.tv_sec - props.flow_end.tv_sec;
     if (diff >= idle_timeout) {
       Log::debug("Idle timeout with error %lus\n", diff - idle_timeout);
 
-      if (!exporter.has_template(type)) {
-        exporter.insert_template(type, serializer.fields(chain, props));
-      }
-      exporter.insert_record(type, serializer.values(chain, props));
+      exporter.insert_record(type, props, values);
       to_remove.emplace_back(it->first);
     }
   }
@@ -193,54 +124,88 @@ static void idle_timeout_check(Exporter &exporter, timeval ts,
   }
 }
 
-static void processor_loop(Plugins::Input input, Exporter &exporter) {
-  auto old = std::chrono::high_resolution_clock::now();
+static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
+  auto flow_type = std::size_t{0};
+  auto flow_digest = std::size_t{0};
+  auto flow_values = std::vector<std::byte>{};
+  auto flow_fields = prepare_fields();
 
-  while (running) {
-    auto input_result = input.get_packet();
-
-    switch (input_result.type) {
-    case END_OF_INPUT:
-      Log::debug("End of input\n");
-      return;
-    case TIMEOUT:
-      Log::debug("Packet capture timeout\n");
-      idle_timeout_check(exporter, {std::time(nullptr), 0}, cache.size());
+  for (auto* p = &pdu; p != nullptr; p = p->inner_pdu()) {
+    const auto pdu_type = p->pdu_type();
+    const auto& reducer = reducers[pdu_type];
+    if (!reducer)
       continue;
-    case PACKET:
-      Log::debug("Processing packet, cache size %lu\n", cache.size());
-    }
 
-    /* Calculate time difference between last packet and now */
-    auto now = std::chrono::high_resolution_clock::now();
-    auto delta = now - old;
-    old = now;
-
-    auto &raw = input_result.packet;
-    auto packet = Tins::EthernetII{};
-    try {
-      packet = Tins::EthernetII{raw.data, raw.caplen};
-    } catch (const std::exception& e) {
-      Log::error("Failed to parse packet: %s\n", e.what());
+    if (!reducer->should_process())
       continue;
+
+    /* Reduce PDU into type, digest and values */
+    flow_type = combine(flow_type, reducer->type());
+    flow_digest = combine(flow_digest, reducer->digest(pdu));
+    auto values = reducer->values(*p);
+    flow_values.insert(flow_values.end(), values.begin(), values.end());
+    auto fields = reducer->fields();
+    flow_fields.insert(flow_fields.end(), fields.begin(), fields.end());
+
+    if (pdu_type == Tins::PDU::PDUType::UDP) {
+      auto* udp = static_cast<const Tins::UDP*>(p);
+      const auto& raw = p->rfind_pdu<Tins::RawPDU>();
+      if (udp->dport() == Protocols::VXLAN::VXLAN_PORT) {
+        p->inner_pdu(new Protocols::VXLAN(raw.payload().data(), raw.payload_size()));
+      }
     }
-    auto chain = reduce_packet(packet);
-
-    auto raw_ts = timeval{raw.sec, raw.usec};
-
-    if (!chain.empty()) {
-      auto &[_, record] =
-          *cache.insert(serializer.digest(chain), std::move(chain), raw_ts);
-
-      active_timeout_check(exporter, record, raw_ts);
-    }
-
-    std::size_t peek_interval =
-      std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
-    peek_interval = cache.size() / 1000.f * peek_interval;
-    peek_interval = std::clamp(peek_interval, 1lu, cache.size());
-    idle_timeout_check(exporter, raw_ts, peek_interval);
   }
+
+  if (flow_values.empty())
+    return;
+
+  // TODO(dudoslav): Move generation of fields here
+  /* If template does not exist generate it */
+  if (!exporter.has_template(flow_type)) {
+    exporter.insert_template(flow_type, flow_fields);
+  }
+
+  auto e = cache.insert(flow_digest, flow_type, std::move(flow_values), ts);
+  active_timeout_check(exporter, e, ts);
+}
+
+static void reducers_init() {
+  register_reducer<IP>(Tins::PDU::PDUType::IP);
+  register_reducer<TCP>(Tins::PDU::PDUType::TCP);
+  register_reducer<UDP>(Tins::PDU::PDUType::UDP);
+  register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q);
+  register_reducer<VXLAN>(Protocols::VXLAN_PDU);
+}
+
+static void processor_loop(Plugins::Input& input) {
+  auto exporter = Exporter{Options::ip_address, Options::port};
+
+  std::signal(SIGINT, on_signal);
+  while (running) {
+    auto res = input.get_packet();
+    if (res.type != PACKET)
+      break;
+
+    try {
+      auto pdu = Tins::EthernetII{res.packet.data, res.packet.caplen};
+      auto ts = timeval{res.packet.sec, res.packet.usec};
+
+      process_packet(pdu, ts, exporter);
+
+      idle_timeout_check(exporter, ts, 10);
+    } catch (...) {
+      continue;
+    }
+  }
+
+  /* Flush flow cache */
+  for (auto& [_, r] : cache) {
+    auto& [props, type, values] = r;
+
+    exporter.insert_record(type, props, values);
+  }
+
+  exporter.export_all();
 }
 
 /**
@@ -249,34 +214,8 @@ static void processor_loop(Plugins::Input input, Exporter &exporter) {
  * @param input Input plugin to use to get packets to process
  */
 void start_processor(Plugins::Input input) {
-  auto ip_address = Options::ip_address;
-  auto port = Options::port;
-  auto definition = Options::definition;
-
-  auto exporter = Exporter{ip_address, port};
-  serializer.set_definition(definition);
-
-  std::signal(SIGINT, on_signal);
-
-  /* Register our GRE PDU parser into tins */
-  Tins::Allocators::register_allocator<Tins::IP, GREPDU>(IPFIX::PROTOCOL_GRE);
-
-  /* Start main metering process */
-  processor_loop(std::move(input), exporter);
-
-  /* Flush cache */
-  for (const auto &[_, r] : cache) {
-    auto &[props, chain] = r;
-    auto type = Flow::type(chain);
-
-    if (!exporter.has_template(type)) {
-      exporter.insert_template(type, serializer.fields(chain, props));
-    }
-    exporter.insert_record(type, serializer.values(chain, props));
-  }
-
-  /* Flush exporter */
-  exporter.export_all();
+  reducers_init();
+  processor_loop(input);
 }
 
 } // namespace Flow

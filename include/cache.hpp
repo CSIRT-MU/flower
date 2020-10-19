@@ -1,9 +1,8 @@
 #pragma once
 
 #include <unordered_map>
-#include <ctime>
-
-#include <protocol.hpp>
+#include <vector>
+#include <ipfix.hpp>
 
 namespace Flow {
 
@@ -19,18 +18,21 @@ class Cache {
   using Type = std::size_t;
   using Digest = std::size_t;
   using Timestamp = timeval;
+  using Values = std::vector<std::byte>;
+  using Record = std::tuple<IPFIX::Properties, Type, Values>;
   using RecordsType = std::unordered_map<Digest, Record>;
 
   RecordsType _records;
 
 public:
+  using Entry = RecordsType::iterator;
 
-  RecordsType::iterator insert(Digest, Chain, Timestamp);
+  Entry insert(Digest, Type, Values, Timestamp);
   void erase(Digest);
-  std::size_t size() const;
-  RecordsType::iterator find(Digest);
-  RecordsType::iterator begin();
-  RecordsType::iterator end();
+  Entry find(Digest);
+
+  Entry begin();
+  Entry end();
 };
 
 } // namespace Flow

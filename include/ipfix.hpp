@@ -1,5 +1,8 @@
 #pragma once
 
+#include <ctime>
+#include <cstdint>
+
 namespace IPFIX {
 
 /* Type sizes */
@@ -54,8 +57,14 @@ enum class Type : std::uint8_t {
   VXLAN 
 };
 
+struct Properties {
+  std::size_t count;
+  timeval flow_start;
+  timeval flow_end;
+};
+
 /* Cast from Type to uint8_t */
-[[nodiscard]] inline std::uint8_t ttou(const Type &type) {
+[[nodiscard]] constexpr std::uint8_t ttou(const Type &type) {
   return static_cast<std::underlying_type_t<Type>>(type);
 }
 

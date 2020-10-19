@@ -18,9 +18,10 @@ unsigned int active_timeout = 600;
 unsigned int idle_timeout = 300;
 std::string ip_address = "127.0.0.1";
 short port = 20'000;
-Flow::Definition definition = {};
 
 using namespace clipp;
+
+static toml::value toml_file;
 
 static auto mode_process = "Process options:"
   % (
@@ -85,89 +86,19 @@ void print_help(const char* app_name) {
   std::cout << make_man_page(cli, app_name) << '\n';
 }
 
+const toml::value& get_toml() {
+  return toml_file;
+}
+
 void load_file(const std::string& path) {
-  auto file = toml::parse(path);
+  toml_file = toml::parse(path);
 
   // Global values
-  auto global = toml::find(file, "global");
+  auto global = toml::find(toml_file, "global");
   active_timeout = toml::find_or(global, "active_timeout", active_timeout);
   idle_timeout = toml::find_or(global, "idle_timeout", idle_timeout);
   ip_address = toml::find_or(global, "ip_address", ip_address);
   port = toml::find_or(global, "port", port);
-
-  // IP values
-  if (file.contains("ip")) {
-    auto ip = toml::find(file, "ip");
-    auto& ip_def = definition.ip;
-    ip_def.process = true;
-    ip_def.src = toml::find_or(ip, "src", ip_def.src);
-    ip_def.dst = toml::find_or(ip, "dst", ip_def.dst);
-  } else {
-    definition.ip.process = false;
-  }
-
-  // IPv6 values
-  if (file.contains("ipv6")) {
-    auto ipv6 = toml::find(file, "ipv6");
-    auto& ipv6_def = definition.ipv6;
-    ipv6_def.process = true;
-    ipv6_def.src = toml::find_or(ipv6, "src", ipv6_def.src);
-    ipv6_def.dst = toml::find_or(ipv6, "dst", ipv6_def.dst);
-  } else {
-    definition.ipv6.process = false;
-  }
-
-  // TCP values
-  if (file.contains("tcp")) {
-    auto tcp = toml::find(file, "tcp");
-    auto& tcp_def = definition.tcp;
-    tcp_def.process = true;
-    tcp_def.src = toml::find_or(tcp, "src", tcp_def.src);
-    tcp_def.dst = toml::find_or(tcp, "dst", tcp_def.dst);
-  } else {
-    definition.tcp.process = false;
-  }
-
-  // UDP values
-  if (file.contains("udp")) {
-    auto udp = toml::find(file, "udp");
-    auto& udp_def = definition.udp;
-    udp_def.process = true;
-    udp_def.src = toml::find_or(udp, "src", udp_def.src);
-    udp_def.dst = toml::find_or(udp, "dst", udp_def.dst);
-  } else {
-    definition.udp.process = false;
-  }
-
-  // VLAN values
-  if (file.contains("vlan")) {
-    auto vlan = toml::find(file, "vlan");
-    auto& vlan_def = definition.dot1q;
-    vlan_def.process = true;
-    vlan_def.id = toml::find_or(vlan, "id", vlan_def.id);
-  } else {
-    definition.dot1q.process = false;
-  }
-
-  // MPLS values
-  if (file.contains("mpls")) {
-    auto mpls = toml::find(file, "mpls");
-    auto& mpls_def = definition.mpls;
-    mpls_def.process = true;
-    mpls_def.label = toml::find_or(mpls, "label", mpls_def.label);
-  } else {
-    definition.mpls.process = false;
-  }
-
-  // VXLAN values
-  if (file.contains("vxlan")) {
-    auto vxlan = toml::find(file, "vxlan");
-    auto& vxlan_def = definition.vxlan;
-    vxlan_def.process = true;
-    vxlan_def.vni = toml::find_or(vxlan, "vni", vxlan_def.vni);
-  } else {
-    definition.vxlan.process = false;
-  }
 }
 
 }
