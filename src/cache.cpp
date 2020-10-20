@@ -30,6 +30,12 @@ Cache::insert(Digest digest, Type type, Values values, Timestamp ts)
   }
 }
 
+std::size_t
+Cache::size() const
+{
+  return _records.size();
+}
+
 void
 Cache::erase(Digest digest)
 {

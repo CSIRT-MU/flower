@@ -4,6 +4,7 @@
 #include <memory>
 #include <atomic>
 #include <csignal>
+#include <chrono>
 
 #include <tins/tins.h>
 
@@ -16,6 +17,7 @@
 #include <protocols/vxlan.hpp>
 
 #include <flows/ip.hpp>
+#include <flows/ipv6.hpp>
 #include <flows/tcp.hpp>
 #include <flows/udp.hpp>
 #include <flows/vlan.hpp>
@@ -171,6 +173,7 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
 
 static void reducers_init() {
   register_reducer<IP>(Tins::PDU::PDUType::IP);
+  register_reducer<IPV6>(Tins::PDU::PDUType::IPv6);
   register_reducer<TCP>(Tins::PDU::PDUType::TCP);
   register_reducer<UDP>(Tins::PDU::PDUType::UDP);
   register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q);
@@ -178,6 +181,7 @@ static void reducers_init() {
 }
 
 static void processor_loop(Plugins::Input& input) {
+  auto old = std::chrono::high_resolution_clock::now();
   auto exporter = Exporter{Options::ip_address, Options::port};
 
   std::signal(SIGINT, on_signal);
@@ -192,8 +196,23 @@ static void processor_loop(Plugins::Input& input) {
 
       process_packet(pdu, ts, exporter);
 
-      idle_timeout_check(exporter, ts, 10);
+      /* Time delta calculation */
+      auto now = std::chrono::high_resolution_clock::now();
+      auto delta = now - old;
+      old = now;
+
+      std::size_t peek_interval = std::chrono::duration_cast
+        <std::chrono::milliseconds>(delta).count();
+      peek_interval = cache.size() / 1000.f * peek_interval;
+      peek_interval = std::clamp(peek_interval, 1lu, cache.size());
+      idle_timeout_check(exporter, ts, peek_interval);
+
+      exporter.export_all();
+    } catch (std::runtime_error& e){
+      Log::error("%s\n", e.what());
+      return;
     } catch (...) {
+      /* This might even catch network exceptions */
       continue;
     }
   }

@@ -28,6 +28,7 @@ public:
   using Entry = RecordsType::iterator;
 
   Entry insert(Digest, Type, Values, Timestamp);
+  std::size_t size() const;
   void erase(Digest);
   Entry find(Digest);
 

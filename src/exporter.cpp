@@ -118,8 +118,9 @@ void Exporter::insert_record(std::size_t type,
 }
 
 void Exporter::export_all() {
-  for (const auto& [type, _]: _records) {
-    export_flow(type);
+  for (const auto& [type, record]: _records) {
+    if (!record.empty())
+      export_flow(type);
   }
 }
 
