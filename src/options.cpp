@@ -68,7 +68,6 @@ static auto cli = (
     plugins_flags,
     mode_process
     | mode_print_plugins
-    | mode_print_config
     | (command("-h", "--help") >> set(mode, Mode::PRINT_HELP))
     % "Print this help"
     | (command("-v", "--version") >> set(mode, Mode::PRINT_VERSION))
