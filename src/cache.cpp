@@ -2,46 +2,61 @@
 
 namespace Flow {
 
-Cache::RecordsType::iterator
-Cache::insert(Digest digest, Chain chain, Timestamp timestamp) {
+[[nodiscard]] static bool tsgeq(timeval f, timeval s) {
+  return f.tv_sec == s.tv_sec ? f.tv_usec > s.tv_usec : f.tv_sec > s.tv_sec;
+}
+
+Cache::Entry
+Cache::insert(Digest digest, Type type, Values values, Timestamp ts)
+{
   auto search = _records.find(digest);
   if (search == _records.end()) {
-    auto [it, _] = _records.emplace(digest,
-        Record{Properties{1, timestamp, timestamp}, std::move(chain)});
-
+    auto [it, _] = 
+      _records.emplace(digest, Record{{1, ts, ts}, type, std::move(values)});
     return it;
   } else {
-    auto& props = search->second.first;
+    auto& [props, _, __] = search->second;
 
     props.count += 1;
-    if (props.first_timestamp > timestamp) {
-      props.first_timestamp = timestamp;
+
+    if (tsgeq(props.flow_start, ts)) {
+      props.flow_start = ts;
     }
-    if (props.last_timestamp < timestamp) {
-      props.last_timestamp = timestamp;
+    if (tsgeq(ts, props.flow_end)) {
+      props.flow_end = ts;
     }
 
     return search;
   }
 }
 
-void Cache::erase(Digest digest) {
-  _records.erase(digest);
-}
-
-std::size_t Cache::size() const {
+std::size_t
+Cache::size() const
+{
   return _records.size();
 }
 
-Cache::RecordsType::iterator Cache::find(Digest digest) {
+void
+Cache::erase(Digest digest)
+{
+  _records.erase(digest);
+}
+
+Cache::Entry
+Cache::find(Digest digest)
+{
   return _records.find(digest);
 }
 
-Cache::RecordsType::iterator Cache::begin() {
+Cache::Entry
+Cache::begin()
+{
   return _records.begin();
 }
 
-Cache::RecordsType::iterator Cache::end() {
+Cache::Entry 
+Cache::end()
+{
   return _records.end();
 }
 

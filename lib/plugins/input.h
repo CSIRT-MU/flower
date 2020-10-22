@@ -47,7 +47,8 @@ struct InitResult {
 enum GetPacketResultType {
   TIMEOUT,
   END_OF_INPUT,
-  PACKET
+  PACKET,
+  INPUT_ERROR
 };
 
 struct GetPacketResult {

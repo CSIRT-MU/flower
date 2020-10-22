@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <ctime>
+#include <algorithm>
+#include <common.hpp>
 
 namespace Flow {
 
@@ -76,19 +78,49 @@ void Exporter::insert_template(std::size_t type, std::vector<std::byte> fields) 
   ++_last_template;
 }
 
-void Exporter::insert_record(std::size_t type, std::vector<std::byte> values) {
+void Exporter::insert_record(std::size_t type,
+    IPFIX::Properties props, std::vector<std::byte> values) {
   auto& buffer = _records[type];
 
-  if (buffer.size() + values.size() > MAX_BUFFER_SIZE) {
+  if (buffer.size() + values.size() + 32 > MAX_BUFFER_SIZE) {
     export_flow(type);
   }
 
-  std::move(values.begin(), values.end(), std::back_inserter(buffer));
+  auto bkit = std::back_inserter(buffer);
+
+  std::uint64_t count = htonT(props.count);
+  auto* p = reinterpret_cast<std::byte*>(&count);
+  std::copy_n(p, IPFIX::TYPE_64, bkit);
+
+  std::uint32_t flow_start_sec =
+    htonl(props.flow_start.tv_sec);
+  p = reinterpret_cast<std::byte*>(&flow_start_sec);
+  std::copy_n(p, IPFIX::TYPE_SECONDS, bkit);
+
+  std::uint32_t flow_end_sec =
+    htonl(props.flow_end.tv_sec);
+  p = reinterpret_cast<std::byte*>(&flow_end_sec);
+  std::copy_n(p, IPFIX::TYPE_SECONDS, bkit);
+
+  std::uint64_t flow_start_msec = htonT(
+      props.flow_start.tv_sec * 1000
+      + props.flow_start.tv_usec / 1000);
+  p = reinterpret_cast<std::byte*>(&flow_start_msec);
+  std::copy_n(p, IPFIX::TYPE_MILLISECONDS, bkit);
+
+  std::uint64_t flow_end_msec = htonT(
+      props.flow_end.tv_sec * 1000
+      + props.flow_end.tv_usec / 1000);
+  p = reinterpret_cast<std::byte*>(&flow_end_msec);
+  std::copy_n(p, IPFIX::TYPE_MILLISECONDS, bkit);
+
+  std::move(values.begin(), values.end(), bkit);
 }
 
 void Exporter::export_all() {
-  for (const auto& [type, _]: _records) {
-    export_flow(type);
+  for (const auto& [type, record]: _records) {
+    if (!record.empty())
+      export_flow(type);
   }
 }
 

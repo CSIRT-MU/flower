@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include <network.hpp>
+#include <ipfix.hpp>
 
 namespace Flow {
 
@@ -34,7 +35,7 @@ public:
 
   bool has_template(std::size_t) const;
   void insert_template(std::size_t, std::vector<std::byte>);
-  void insert_record(std::size_t, std::vector<std::byte>);
+  void insert_record(std::size_t, IPFIX::Properties, std::vector<std::byte>);
   void clear();
   void export_all();
 

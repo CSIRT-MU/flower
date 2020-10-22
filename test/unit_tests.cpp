@@ -1,49 +1,83 @@
 #include <gtest/gtest.h>
 
-#include <flow.hpp>
+#include <definition.hpp>
+#include <serializer.hpp>
+
+const static auto def_all = Flow::Definition{
+  {true, true, true},
+  {true, true, true},
+  {true, true, true},
+  {true, true}
+};
 
 TEST(Combine, Basic) {
-  ASSERT_EQ(Flow::combine(0), 0);
-  ASSERT_EQ(Flow::combine(0), Flow::combine(0));
-  ASSERT_EQ(Flow::combine(1, 2), Flow::combine(1, 2));
-  ASSERT_NE(Flow::combine(1, 2), Flow::combine(2, 1));
-  ASSERT_EQ(Flow::combine(2, 3), Flow::combine(2, 3));
-  ASSERT_NE(Flow::combine(2, 3), Flow::combine(3, 2));
-  ASSERT_EQ(Flow::combine(4, 5, 6), Flow::combine(4, 5, 6));
-  ASSERT_NE(Flow::combine(4, 5, 6), Flow::combine(6, 5, 4));
+  ASSERT_EQ(combine(0), 0);
+  ASSERT_EQ(combine(0), combine(0));
+  ASSERT_EQ(combine(1, 2), combine(1, 2));
+  ASSERT_NE(combine(1, 2), combine(2, 1));
+  ASSERT_EQ(combine(2, 3), combine(2, 3));
+  ASSERT_NE(combine(2, 3), combine(3, 2));
+  ASSERT_EQ(combine(4, 5, 6), combine(4, 5, 6));
+  ASSERT_NE(combine(4, 5, 6), combine(6, 5, 4));
 }
 
 TEST(Digest, Protocol) {
   using namespace Flow;
+  auto ser = Serializer();
+  ser.set_definition(def_all);
 
-  auto e1 = Protocol{IP{123456789, 987654321}};
-  auto e2 = Protocol{IP{987654321, 123456789}};
+  auto e1 = Chain{IP{123456789, 987654321}};
+  auto e2 = Chain{IP{987654321, 123456789}};
 
-  ASSERT_NE(digest(e1), digest(e2));
+  ASSERT_NE(ser.digest(e1), ser.digest(e2));
 }
 
 TEST(Digest, NonCommutative) {
   using namespace Flow;
+  auto ser = Serializer();
+  ser.set_definition(def_all);
 
-  auto r1 = Record{};
-  auto r2 = Record{};
+  auto r1 = Chain{};
+  auto r2 = Chain{};
 
   r1.push_back(IP{123456789, 987654321});
   r2.push_back(IP{987654321, 123456789});
 
-  ASSERT_NE(digest(r1), digest(r2));
+  ASSERT_NE(ser.digest(r1), ser.digest(r2));
 
   r1.push_back(TCP{8080, 9669});
   r2.push_back(TCP{9669, 8080});
 
-  ASSERT_NE(digest(r1), digest(r2));
+  ASSERT_NE(ser.digest(r1), ser.digest(r2));
+}
+
+TEST(Digest, ComplexChainsDifferent) {
+  using namespace Flow;
+  auto ser = Serializer();
+  ser.set_definition(def_all);
+
+  auto r1 = Chain{};
+  auto r2 = Chain{};
+
+  r1.push_back(IP{0xA0B00101, 0xA0B00102});
+  r2.push_back(IP{0xA0B00102, 0xA0B00101});
+
+  r1.push_back(VXLAN{0x7B});
+  r2.push_back(VXLAN{0x7B});
+
+  r1.push_back(IP{0x0A000001, 0x0A000002});
+  r2.push_back(IP{0x0A000002, 0x0A000001});
+
+  ASSERT_NE(ser.digest(r1), ser.digest(r2));
 }
 
 TEST(Digest, Record) {
   using namespace Flow;
+  auto ser = Serializer();
+  ser.set_definition(def_all);
 
-  auto r1 = Record{};
-  auto r2 = Record{};
+  auto r1 = Chain{};
+  auto r2 = Chain{};
 
   r1.push_back(IP{123456789, 987654321});
   r1.push_back(TCP{8080, 9669});
@@ -51,7 +85,24 @@ TEST(Digest, Record) {
   r2.push_back(TCP{9669, 8080});
   r2.push_back(IP{987654321, 123456789});
 
-  ASSERT_NE(digest(r1), digest(r2));
+  ASSERT_NE(ser.digest(r1), ser.digest(r2));
+}
+
+TEST(Digest, UsingType) {
+  using namespace Flow;
+  auto ser = Serializer();
+  ser.set_definition(def_all);
+
+  auto r1 = Chain{};
+  auto r2 = Chain{};
+
+  r1.push_back(TCP{1000, 2000});
+  r1.push_back(UDP{8080, 9669});
+
+  r2.push_back(UDP{1000, 2000});
+  r2.push_back(TCP{8080, 9669});
+
+  ASSERT_NE(ser.digest(r1), ser.digest(r2));
 }
 
 TEST(Combine, Associative) {
@@ -75,8 +126,8 @@ TEST(Combine, Associative) {
 TEST(Type, RecordDifferent) {
   using namespace Flow;
 
-  auto r1 = Record{};
-  auto r2 = Record{};
+  auto r1 = Chain{};
+  auto r2 = Chain{};
 
   r1.push_back(IP{123456789, 987654321});
   r1.push_back(TCP{8080, 9669});
@@ -90,8 +141,8 @@ TEST(Type, RecordDifferent) {
 TEST(Type, RecordSame) {
   using namespace Flow;
 
-  auto r1 = Record{};
-  auto r2 = Record{};
+  auto r1 = Chain{};
+  auto r2 = Chain{};
 
   r1.push_back(IP{123456789, 987654321});
   r1.push_back(TCP{8080, 9669});
@@ -105,8 +156,8 @@ TEST(Type, RecordSame) {
 TEST(Type, RecordDifferentLength) {
   using namespace Flow;
 
-  auto r1 = Record{};
-  auto r2 = Record{};
+  auto r1 = Chain{};
+  auto r2 = Chain{};
 
   r1.push_back(IP{123456789, 987654321});
   r1.push_back(TCP{8080, 9669});

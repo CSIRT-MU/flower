@@ -30,9 +30,9 @@ target_compile_options(flower PRIVATE -Wall -Wextra -pedantic)
 
 add_subdirectory(plugins)
 
-if(ENABLE_TESTS)
-  add_subdirectory(test) 
-endif()
+# if(ENABLE_TESTS)
+#   add_subdirectory(test) 
+# endif()
 
 if(ENABLE_CLANG_TIDY)
   set(CMAKE_CXX_CLANG_TIDY clang-tidy)
