@@ -26,15 +26,15 @@ public:
     }
   }
 
-  bool should_process() override {
+  bool should_process() const override {
     return _def.process;
   }
 
-  std::size_t type() override {
+  std::size_t type() const override {
     return ttou(IPFIX::Type::DOT1Q);
   }
 
-  std::size_t digest(const Tins::PDU& pdu) override {
+  std::size_t digest(const Tins::PDU& pdu) const override {
     auto digest = std::size_t{type()};
 
     const auto& vlan = static_cast<const Tins::Dot1Q&>(pdu);
@@ -45,7 +45,7 @@ public:
     return digest;
   }
 
-  std::vector<std::byte> fields() override {
+  std::vector<std::byte> fields() const override {
     auto fields = std::vector<std::byte>{};
     auto bkit = std::back_inserter(fields);
 
@@ -61,7 +61,7 @@ public:
     return fields;
   }
 
-  std::vector<std::byte> values(const Tins::PDU& pdu) override {
+  std::vector<std::byte> values(const Tins::PDU& pdu) const override {
     const auto& dot1q = static_cast<const Tins::Dot1Q&>(pdu);
     auto values = std::vector<std::byte>{};
     auto bkit = std::back_inserter(values);

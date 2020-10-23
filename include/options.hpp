@@ -28,7 +28,7 @@ extern short port;
 // FUNCTIONS
 void parse_args(int, char**);
 void load_file(const std::string&);
-const toml::value& get_toml();
+const toml::table& flow_config();
 void print_help(const char*);
 
 } // namespace Options

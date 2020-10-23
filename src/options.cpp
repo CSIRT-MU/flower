@@ -85,19 +85,18 @@ void print_help(const char* app_name) {
   std::cout << make_man_page(cli, app_name) << '\n';
 }
 
-const toml::value& get_toml() {
-  return toml_file;
+const toml::table& flow_config() {
+  return toml::find<toml::table>(toml_file, "flow");
 }
 
 void load_file(const std::string& path) {
   toml_file = toml::parse(path);
 
   // Global values
-  auto global = toml::find(toml_file, "global");
-  active_timeout = toml::find_or(global, "active_timeout", active_timeout);
-  idle_timeout = toml::find_or(global, "idle_timeout", idle_timeout);
-  ip_address = toml::find_or(global, "ip_address", ip_address);
-  port = toml::find_or(global, "port", port);
+  active_timeout = toml::find_or(toml_file, "active_timeout", active_timeout);
+  idle_timeout = toml::find_or(toml_file, "idle_timeout", idle_timeout);
+  ip_address = toml::find_or(toml_file, "ip_address", ip_address);
+  port = toml::find_or(toml_file, "port", port);
 }
 
 }

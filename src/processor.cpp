@@ -14,6 +14,8 @@
 #include <cache.hpp>
 #include <exporter.hpp>
 #include <buffer.hpp>
+#include <parser.hpp>
+#include <reducer.hpp>
 
 #include <protocols/vxlan.hpp>
 
@@ -26,7 +28,6 @@
 
 namespace Flow {
 
-static std::unordered_map<Tins::PDU::PDUType, std::unique_ptr<Flow>> reducers;
 static std::atomic<bool> running = true;
 static Cache cache;
 
@@ -38,11 +39,6 @@ static void on_signal(int) {
 
   Log::info("Shuting down. Please wait for cleanup...\n");
   running = false;
-}
-
-template<typename Reducer>
-static void register_reducer(Tins::PDU::PDUType pdu_type) {
-  reducers.emplace(pdu_type, std::make_unique<Reducer>(Options::get_toml()));
 }
 
 static Buffer
@@ -125,7 +121,7 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
 
   for (auto* p = &pdu; p != nullptr; p = p->inner_pdu()) {
     const auto pdu_type = p->pdu_type();
-    const auto& reducer = reducers[pdu_type];
+    const auto& reducer = Reducer::reducer(pdu_type);
     if (!reducer)
       continue;
 
@@ -147,14 +143,6 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
     flow_values.push_back_any<std::uint16_t>(htons(template_id));
     flow_values.push_back_any<std::uint16_t>(htons(values.size() + 4));
     flow_values.insert(flow_values.end(), values.begin(), values.end());
-
-    if (pdu_type == Tins::PDU::PDUType::UDP) {
-      auto* udp = static_cast<const Tins::UDP*>(p);
-      const auto& raw = p->rfind_pdu<Tins::RawPDU>();
-      if (udp->dport() == Protocols::VXLAN::VXLAN_PORT) {
-        p->inner_pdu(new Protocols::VXLAN(raw.payload().data(), raw.payload_size()));
-      }
-    }
   }
 
   flow_values.set_any_at<std::uint16_t>(1, htons(flow_values.size() - 3));
@@ -166,12 +154,14 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
 }
 
 static void reducers_init() {
-  register_reducer<IP>(Tins::PDU::PDUType::IP);
-  register_reducer<IPV6>(Tins::PDU::PDUType::IPv6);
-  register_reducer<TCP>(Tins::PDU::PDUType::TCP);
-  register_reducer<UDP>(Tins::PDU::PDUType::UDP);
-  register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q);
-  register_reducer<VXLAN>(Protocols::VXLAN_PDU);
+  Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, Options::flow_config());
+  Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, Options::flow_config());
+  Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, Options::flow_config());
+  Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, Options::flow_config());
+  Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, Options::flow_config());
+  Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, Options::flow_config());
+
+  Parser::register_udp_parser<Protocols::VXLAN>(Protocols::VXLAN::VXLAN_PORT);
 }
 
 static void processor_loop(Plugins::Input& input) {
@@ -185,10 +175,10 @@ static void processor_loop(Plugins::Input& input) {
       break;
 
     try {
-      auto pdu = Tins::EthernetII{res.packet.data, res.packet.caplen};
+      auto pdu = Parser::parse(res.packet.data, res.packet.caplen);
       auto ts = timeval{res.packet.sec, res.packet.usec};
 
-      process_packet(pdu, ts, exporter);
+      process_packet(*pdu, ts, exporter);
 
       /* Time delta calculation */
       auto now = std::chrono::high_resolution_clock::now();
