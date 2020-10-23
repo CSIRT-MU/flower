@@ -5,6 +5,9 @@
 
 namespace IPFIX {
 
+/* Version */
+static constexpr std::uint16_t VERSION = 0x000A;
+
 /* Type sizes */
 static constexpr std::uint16_t TYPE_8 = 1;
 static constexpr std::uint16_t TYPE_16 = 2;
@@ -15,6 +18,10 @@ static constexpr std::uint16_t TYPE_IPV6 = 16;
 static constexpr std::uint16_t TYPE_SECONDS = TYPE_32;
 static constexpr std::uint16_t TYPE_MILLISECONDS = TYPE_64;
 static constexpr std::uint16_t TYPE_MICROSECONDS = TYPE_64;
+static constexpr std::uint16_t TYPE_LIST = 0xFFFF;
+
+/* Semantics */
+static constexpr std::uint8_t SEMANTIC_ORDERED = 0x04;
 
 /* Template/Record fields */
 /* https://www.iana.org/assignments/ipfix/ipfix.xhtml */
@@ -34,6 +41,7 @@ static constexpr std::uint16_t FIELD_FLOW_START_MILLISECONDS = 152;
 static constexpr std::uint16_t FIELD_FLOW_END_MILLISECONDS = 153;
 static constexpr std::uint16_t FIELD_FLOW_START_MICROSECONDS = 154;
 static constexpr std::uint16_t FIELD_FLOW_END_MICROSECONDS = 155;
+static constexpr std::uint16_t FIELD_SUB_TEMPLATE_MULTI_LIST = 293;
 static constexpr std::uint16_t FIELD_LAYER2_SEGEMENT_ID = 351;
 
 /* Protocol identifiers */
@@ -47,7 +55,7 @@ static constexpr std::uint8_t VERSION_IPV4 = 4;
 static constexpr std::uint8_t VERSION_IPV6 = 6;
 
 /* IPFIX type enum */
-enum class Type : std::uint8_t {
+enum class Type {
   IP,
   IPV6,
   TCP = PROTOCOL_TCP,
