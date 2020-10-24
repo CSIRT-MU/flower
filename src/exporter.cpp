@@ -1,11 +1,6 @@
 #include <exporter.hpp>
 
-#include <cstdint>
-#include <ctime>
-#include <algorithm>
-
 #include <common.hpp>
-#include <buffer.hpp>
 
 namespace Flow {
 
@@ -30,7 +25,8 @@ struct [[gnu::packed]] TemplateHeader {
 };
 
 static Buffer
-prepare_fields() {
+prepare_flow_template()
+{
   auto result = Buffer{};
 
   result.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_PACKET_DELTA_COUNT));
@@ -43,6 +39,8 @@ prepare_fields() {
   result.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_MILLISECONDS));
   result.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_FLOW_END_MILLISECONDS));
   result.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_MILLISECONDS));
+  result.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_FLOW_END_REASON));
+  result.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_8));
   result.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_SUB_TEMPLATE_MULTI_LIST));
   result.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_LIST));
 
@@ -50,72 +48,92 @@ prepare_fields() {
 }
 
 Exporter::Exporter(const std::string& address, std::uint16_t port)
-  : _conn(Net::Connection::tcp(address, port)) {
-  insert_template(69, prepare_fields());
-}
+  : _conn(Net::Connection::tcp(address, port))
+{
+  _buffer.reserve(BUFFER_SIZE);
+  _buffer.push_back_any<MessageHeader>({});
 
-
-bool
-Exporter::has_template(std::size_t type) const {
-  return _templates.find(type) != _templates.end();
-}
-
-std::uint16_t
-Exporter::get_template_id(std::size_t type) const {
-  return _templates.find(type)->second.first;
+  copy_template(FLOW_TEMPLATE, prepare_flow_template());
 }
 
 std::uint16_t
-Exporter::insert_template(std::size_t type, std::vector<std::byte> fields) {
-  auto message = Buffer{};
-  message.push_back_any<MessageHeader>({});
-  message.push_back_any<TemplateHeader>({
-      htons(IPFIX_TEMPLATE_ID),
+Exporter::get_template_id(std::size_t type) const
+{
+  auto search = _templates.find(type);
+
+  if (search == _templates.end())
+    return 0;
+
+  return search->second;
+}
+
+void 
+Exporter::copy_template(std::uint16_t tid, Buffer fields)
+{
+  _buffer.push_back_any<TemplateHeader>({
+      htons(IPFIX::SET_TEMPLATE),
       htons(sizeof(TemplateHeader) + fields.size()),
-      htons(_last_template),
+      htons(tid),
       htons(fields.size() / 4)
       });
-  message.insert(message.end(), fields.begin(), fields.end());
-  message.set_any_at<MessageHeader>(0, {
-      htons(IPFIX::VERSION),
-      htons(message.size()),
-      htonl(std::time(nullptr)),
-      htonl(++_sequence_num),
-      htonl(0),
-      });
-  _conn.write(message.data(), message.size());
-  
-  _templates.emplace(type, std::make_pair(_last_template, std::move(fields)));
-  return ++_last_template - 1;
+
+  _buffer.insert(_buffer.end(), fields.begin(), fields.end());
+}
+
+std::uint16_t
+Exporter::insert_template(std::size_t type, Buffer fields)
+{
+  if (_buffer.capacity() < fields.size() + sizeof(TemplateHeader))
+    flush();
+
+  copy_template(_last_template, fields);
+
+  _templates.emplace(type, _last_template);
+  ++_last_template;
+
+  return _last_template - 1;
 }
 
 void
-Exporter::insert_record(IPFIX::Properties props, std::vector<std::byte> values) {
-  auto message = Buffer{};
+Exporter::insert_record(
+    const IPFIX::Properties& props, std::uint8_t reason, Buffer values)
+{
+  if (_buffer.capacity() < values.size() + sizeof(RecordHeader))
+    flush();
 
-  message.push_back_any<MessageHeader>({});
-  message.push_back_any<RecordHeader>({
-      htons(IPFIX_USER_TEMPLATES),
-      htons(sizeof(RecordHeader) + values.size() + 32)
+  _buffer.push_back_any<RecordHeader>({
+      htons(FLOW_TEMPLATE),
+      htons(sizeof(RecordHeader) + 33 + values.size())
       });
-  message.push_back_any<std::uint64_t>(htonT(props.count));
-  message.push_back_any<std::uint32_t>(htonl(props.flow_start.tv_sec));
-  message.push_back_any<std::uint32_t>(htonl(props.flow_end.tv_sec));
-  // TODO: finish
-  message.push_back_any<std::uint64_t>(htonT(props.flow_start.tv_sec * 1000));
-  message.push_back_any<std::uint64_t>(htonT(props.flow_end.tv_sec * 1000));
 
-  message.insert(message.end(), values.begin(), values.end());
+  _buffer.push_back_any<std::uint64_t>(htonT(props.count));
+  _buffer.push_back_any<std::uint32_t>(htonl(props.flow_start.tv_sec));
+  _buffer.push_back_any<std::uint32_t>(htonl(props.flow_end.tv_sec));
+  _buffer.push_back_any<std::uint64_t>(
+      htonT(props.flow_start.tv_sec * 1000 + props.flow_start.tv_usec / 1000));
+  _buffer.push_back_any<std::uint64_t>(
+      htonT(props.flow_end.tv_sec * 1000 + props.flow_end.tv_usec / 1000));
+  _buffer.push_back_any<std::uint8_t>(reason);
 
-  message.set_any_at<MessageHeader>(0, {
+  _buffer.insert(_buffer.end(), values.begin(), values.end());
+
+  ++_sequence_num;
+}
+
+void
+Exporter::flush()
+{
+  _buffer.set_any_at<MessageHeader>(0, {
       htons(IPFIX::VERSION),
-      htons(message.size()),
+      htons(_buffer.size()),
       htonl(std::time(nullptr)),
-      htonl(++_sequence_num),
-      htonl(0),
+      htonl(_sequence_num),
+      htonl(0)
       });
 
-  _conn.write(message.data(), message.size());
+  _conn.write(_buffer.data(), _buffer.size());
+  _buffer.clear();
+  _buffer.push_back_any<MessageHeader>({});
 }
 
 } // namespace Flow

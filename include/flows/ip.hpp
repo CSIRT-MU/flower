@@ -50,58 +50,42 @@ public:
     return digest;
   }
 
-  std::vector<std::byte> fields() const override {
-    auto fields = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(fields);
+  Buffer fields() const override {
+    auto fields = Buffer{};
 
     if (_def.src) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_SRC_IP4_ADDR),
-        htons(IPFIX::TYPE_IPV4)
-      };
-      const auto* fp = reinterpret_cast<std::byte*>(f.data());
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_SRC_IP4_ADDR));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_IPV4));
     }
 
     if (_def.dst) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_DST_IP4_ADDR),
-        htons(IPFIX::TYPE_IPV4)
-      };
-      const auto* fp = reinterpret_cast<std::byte*>(f.data());
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_DST_IP4_ADDR));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_IPV4));
     }
 
-    auto f = std::array{
-      htons(IPFIX::FIELD_IP_VERSION),
-      htons(IPFIX::TYPE_8)
-    };
-    const auto* fp = reinterpret_cast<std::byte*>(f.data());
-    std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_IP_VERSION));
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_8));
+
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER));
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_8));
 
     return fields;
   }
 
-  std::vector<std::byte> values(const Tins::PDU& pdu) const override {
+  Buffer values(const Tins::PDU& pdu) const override {
     const auto& ip = static_cast<const Tins::IP&>(pdu);
-    auto values = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(values);
+    auto values = Buffer{};
 
     if (_def.src) {
-      uint32_t src = ip.src_addr();
-      const auto* vp = reinterpret_cast<std::byte*>(&src);
-      std::copy_n(vp, IPFIX::TYPE_IPV4, bkit);
+      values.push_back_any<std::uint32_t>(ip.src_addr());
     }
 
     if (_def.dst) {
-      uint32_t dst = ip.dst_addr();
-      const auto* vp = reinterpret_cast<std::byte*>(&dst);
-      std::copy_n(vp, IPFIX::TYPE_IPV4, bkit);
+      values.push_back_any<std::uint32_t>(ip.dst_addr());
     }
 
-    uint8_t version = htonT(ip.version());
-    const auto* vp = reinterpret_cast<std::byte*>(&version);
-    std::copy_n(vp, IPFIX::TYPE_8, bkit);
+    values.push_back_any<std::uint8_t>(ip.version());
+    values.push_back_any<std::uint8_t>(ip.protocol());
 
     return values;
   }

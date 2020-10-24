@@ -5,6 +5,10 @@
 
 namespace IPFIX {
 
+/* Set IDs */
+static constexpr std::uint16_t SET_TEMPLATE = 2;
+static constexpr std::uint16_t SET_USER_TEMPLATE = 256;
+
 /* Version */
 static constexpr std::uint16_t VERSION = 0x000A;
 
@@ -35,6 +39,7 @@ static constexpr std::uint16_t FIELD_SRC_PORT = 7;
 static constexpr std::uint16_t FIELD_DST_PORT = 11;
 static constexpr std::uint16_t FIELD_VLAN_ID = 58;
 static constexpr std::uint16_t FIELD_IP_VERSION = 60;
+static constexpr std::uint16_t FIELD_FLOW_END_REASON = 136;
 static constexpr std::uint16_t FIELD_FLOW_START_SECONDS = 150;
 static constexpr std::uint16_t FIELD_FLOW_END_SECONDS = 151;
 static constexpr std::uint16_t FIELD_FLOW_START_MILLISECONDS = 152;
@@ -51,8 +56,10 @@ static constexpr std::uint8_t PROTOCOL_UDP = 17;
 static constexpr std::uint8_t PROTOCOL_GRE = 47;
 static constexpr std::uint8_t PROTOCOL_MPLS = 137;
 
-static constexpr std::uint8_t VERSION_IPV4 = 4;
-static constexpr std::uint8_t VERSION_IPV6 = 6;
+/* Flow end reasons */
+static constexpr std::uint8_t REASON_IDLE = 0x01;
+static constexpr std::uint8_t REASON_ACTIVE = 0x02;
+static constexpr std::uint8_t REASON_FORCED = 0x04;
 
 /* IPFIX type enum */
 enum class Type {
@@ -72,7 +79,10 @@ struct Properties {
 };
 
 /* Cast from Type to uint8_t */
-[[nodiscard]] constexpr std::uint8_t ttou(const Type &type) {
+[[nodiscard]]
+constexpr std::underlying_type_t<Type>
+ttou(const Type &type)
+{
   return static_cast<std::underlying_type_t<Type>>(type);
 }
 

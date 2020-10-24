@@ -20,11 +20,6 @@
 #include <protocols/vxlan.hpp>
 
 #include <flows/ip.hpp>
-#include <flows/ipv6.hpp>
-#include <flows/tcp.hpp>
-#include <flows/udp.hpp>
-#include <flows/vlan.hpp>
-#include <flows/vxlan.hpp>
 
 namespace Flow {
 
@@ -128,14 +123,12 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
     if (!reducer->should_process())
       continue;
 
-    /* Reduce PDU into type, digest and values */
     auto flow_type = reducer->type();
     flow_digest = combine(flow_digest, reducer->digest(pdu));
+
     /* Check if template exists */
-    auto template_id = std::uint16_t{};
-    if (exporter.has_template(flow_type)) {
-      template_id = exporter.get_template_id(flow_type);
-    } else {
+    auto template_id = exporter.get_template_id(flow_type);
+    if (template_id == 0) {
       template_id = exporter.insert_template(flow_type, reducer->fields());
     }
 
@@ -147,19 +140,20 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
 
   flow_values.set_any_at<std::uint16_t>(1, htons(flow_values.size() - 3));
 
-  if (flow_values.empty())
+  if (flow_values.size() <= 4)
     return;
 
-  exporter.insert_record({1, ts, ts}, flow_values);
+  exporter.insert_record({1, ts, ts}, IPFIX::REASON_FORCED, flow_values);
+  exporter.flush();
 }
 
 static void reducers_init() {
   Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, Options::config());
-  Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, Options::config());
-  Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, Options::config());
-  Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, Options::config());
-  Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, Options::config());
-  Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, Options::config());
+  // Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, Options::config());
+  // Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, Options::config());
+  // Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, Options::config());
+  // Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, Options::config());
+  // Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, Options::config());
 
   Parser::register_udp_parser<Protocols::VXLAN>(Protocols::VXLAN::VXLAN_PORT);
 }
