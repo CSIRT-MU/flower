@@ -25,7 +25,7 @@ class Exporter {
 
 public:
 
-  Exporter(const std::string&, short);
+  Exporter(const std::string&, std::uint16_t);
 
   bool has_template(std::size_t) const;
   std::uint16_t get_template_id(std::size_t) const;

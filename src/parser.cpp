@@ -27,6 +27,7 @@ parse_udp(const Tins::UDP* udp) {
 std::unique_ptr<Tins::PDU>
 parse(const std::uint8_t* data, std::uint32_t size)
 {
+  /* Parse packet data as EthernetII packet. This might throw exception */
   Tins::PDU* pdu = new Tins::EthernetII{data, size};
 
   /* Parse TCP and UDP inner protocols */

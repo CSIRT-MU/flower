@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+
 #include <toml.hpp>
 
 namespace Options {
@@ -9,26 +10,35 @@ static constexpr auto SYSTEM_PLUGINS_DIR = "/var/flower/plugins";
 
 enum class Mode {
   PRINT_PLUGINS,
-  PRINT_CONFIG,
   PRINT_HELP,
   PRINT_VERSION,
   PROCESS
 };
 
-// OPTIONS
-extern Mode mode;
-extern std::string argument;
-extern std::string plugins_dir;
-extern std::string input_plugin;
-extern unsigned int active_timeout;
-extern unsigned int idle_timeout;
-extern std::string ip_address;
-extern short port;
+/**
+ * Struct holding all options that can be loaded both from file
+ * and from command line.
+ */
+struct Options {
+  Mode mode;
+  std::string argument;
+  std::string plugins_dir;
+  std::string input_plugin;
+  std::uint32_t active_timeout;
+  std::uint32_t idle_timeout;
+  std::string ip_address;
+  std::uint16_t port;
+};
 
-// FUNCTIONS
-void parse_args(int, char**);
-void load_file(const std::string&);
-const toml::table& flow_config();
+/* Modifiers */
+void merge_args(int, char**);
+void merge_file(const std::string&);
+
+/* Helpers */
 void print_help(const char*);
+
+/* Getters */
+const toml::value& config();
+const Options& options();
 
 } // namespace Options

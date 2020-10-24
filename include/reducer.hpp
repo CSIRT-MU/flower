@@ -16,7 +16,7 @@ namespace Reducer {
 void insert_reducer(Tins::PDU::PDUType, std::unique_ptr<Flow::Flow>);
 
 template<typename T>
-void register_reducer(Tins::PDU::PDUType pdu_type, const toml::table& config) {
+void register_reducer(Tins::PDU::PDUType pdu_type, const toml::value& config) {
   insert_reducer(pdu_type, std::make_unique<T>(config));
 }
 

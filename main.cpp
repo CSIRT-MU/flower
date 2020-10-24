@@ -12,11 +12,11 @@ load_config() {
   const auto *home = std::getenv("HOME");
   auto home_config = std::string{home} + "/." + CONFIG_NAME;
   if (fs::is_regular_file(home_config)) {
-    Options::load_file(home_config);
+    Options::merge_file(home_config);
   }
 
   if (fs::is_regular_file(CONFIG_NAME)) {
-    Options::load_file(CONFIG_NAME);
+    Options::merge_file(CONFIG_NAME);
   }
 }
 
@@ -38,12 +38,14 @@ init_plugin_manager(Plugins::Manager& manager, const std::string& path) {
 int
 main(int argc, char **argv) {
   load_config();
-  Options::parse_args(argc, argv);
+  Options::merge_args(argc, argv);
+
+  const auto& options = Options::options();
 
   auto plugin_manager = Plugins::Manager{};
-  init_plugin_manager(plugin_manager, Options::plugins_dir);
+  init_plugin_manager(plugin_manager, options.plugins_dir);
 
-  switch (Options::mode) {
+  switch (options.mode) {
   /* List plugins */
   case Options::Mode::PRINT_PLUGINS:
     std::printf("Input plugins:\n");
@@ -69,8 +71,8 @@ main(int argc, char **argv) {
   /* Main process */
   case Options::Mode::PROCESS:
     try {
-      auto input = plugin_manager.create_input(Options::input_plugin,
-                                               Options::argument.c_str());
+      auto input = plugin_manager.create_input(options.input_plugin,
+                                               options.argument.c_str());
       Flow::start_processor(std::move(input));
     } catch (const std::exception &e) {
       Log::error("Error: %s\n", e.what());

@@ -49,7 +49,7 @@ prepare_fields() {
   return result;
 }
 
-Exporter::Exporter(const std::string& address, short port)
+Exporter::Exporter(const std::string& address, std::uint16_t port)
   : _conn(Net::Connection::tcp(address, port)) {
   insert_template(69, prepare_fields());
 }

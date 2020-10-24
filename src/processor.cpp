@@ -154,19 +154,21 @@ static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
 }
 
 static void reducers_init() {
-  Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, Options::flow_config());
-  Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, Options::flow_config());
-  Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, Options::flow_config());
-  Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, Options::flow_config());
-  Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, Options::flow_config());
-  Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, Options::flow_config());
+  Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, Options::config());
+  Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, Options::config());
+  Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, Options::config());
+  Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, Options::config());
+  Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, Options::config());
+  Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, Options::config());
 
   Parser::register_udp_parser<Protocols::VXLAN>(Protocols::VXLAN::VXLAN_PORT);
 }
 
 static void processor_loop(Plugins::Input& input) {
+  const auto& options = Options::options();
+
   auto old = std::chrono::high_resolution_clock::now();
-  auto exporter = Exporter{Options::ip_address, Options::port};
+  auto exporter = Exporter{options.ip_address, options.port};
 
   std::signal(SIGINT, on_signal);
   while (running) {
