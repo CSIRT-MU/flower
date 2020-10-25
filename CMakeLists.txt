@@ -13,8 +13,6 @@ include(cmake/Dependencies.cmake)
 find_package(Threads REQUIRED)
 find_package(libtins REQUIRED)
 
-add_subdirectory(lib)
-
 file(GLOB SOURCES src/*.cpp)
 
 add_executable(flower main.cpp ${SOURCES})
@@ -23,7 +21,7 @@ target_link_libraries(flower PRIVATE
   tins
   clipp::clipp
   toml11::toml11
-  flower_plugins)
+  ${CMAKE_DL_LIBS})
 target_include_directories(flower PRIVATE include)
 target_compile_features(flower PRIVATE cxx_std_17)
 target_compile_options(flower PRIVATE -Wall -Wextra -pedantic)

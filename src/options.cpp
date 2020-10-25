@@ -1,6 +1,7 @@
 #include <options.hpp>
 
 #include <iostream>
+#include <filesystem>
 
 #include <clipp.h>
 
@@ -98,6 +99,11 @@ merge_args(int argc, char** argv)
 void
 merge_file(const std::string& path)
 {
+  using namespace std::filesystem;
+
+  if (!is_regular_file(path))
+    return;
+
   config_file = toml::parse(path);
 
   /* Global options */

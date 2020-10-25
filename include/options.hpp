@@ -6,6 +6,7 @@
 
 namespace Options {
 
+constexpr static auto CONFIG_NAME = "flower.conf";
 static constexpr auto SYSTEM_PLUGINS_DIR = "/var/flower/plugins";
 
 enum class Mode {

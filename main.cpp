@@ -1,61 +1,33 @@
+#include <filesystem>
+
 #include <log.hpp>
 #include <manager.hpp>
 #include <options.hpp>
 #include <processor.hpp>
 
-constexpr static auto CONFIG_NAME = "flower.conf";
-
-static void
-load_config() {
-  namespace fs = std::filesystem;
-
-  const auto *home = std::getenv("HOME");
-  auto home_config = std::string{home} + "/." + CONFIG_NAME;
-  if (fs::is_regular_file(home_config)) {
-    Options::merge_file(home_config);
-  }
-
-  if (fs::is_regular_file(CONFIG_NAME)) {
-    Options::merge_file(CONFIG_NAME);
-  }
-}
-
-static void
-init_plugin_manager(Plugins::Manager& manager, const std::string& path) {
-  namespace fs = std::filesystem;
-
-  if (fs::is_directory(Options::SYSTEM_PLUGINS_DIR)) {
-    Log::info("Loading plugins from %s\n", Options::SYSTEM_PLUGINS_DIR);
-    manager.load_from_folder(Options::SYSTEM_PLUGINS_DIR);
-  }
-
-  if (fs::is_directory(path)) {
-    Log::info("Loading plugins from %s\n", path.c_str());
-    manager.load_from_folder(path);
-  }
-}
-
 int
 main(int argc, char **argv) {
-  load_config();
+
+  const auto *home = std::getenv("HOME");
+  auto home_config = std::string{home} + "/." + Options::CONFIG_NAME;
+
+  /* Load config */
+  Options::merge_file(home_config);
+  Options::merge_file(Options::CONFIG_NAME);
+
+  /* Parse arguments */
   Options::merge_args(argc, argv);
 
   const auto& options = Options::options();
 
-  auto plugin_manager = Plugins::Manager{};
-  init_plugin_manager(plugin_manager, options.plugins_dir);
+  /* Load plugins */
+  Plugins::load_plugins(Options::SYSTEM_PLUGINS_DIR);
+  Plugins::load_plugins(options.plugins_dir);
 
   switch (options.mode) {
   /* List plugins */
   case Options::Mode::PRINT_PLUGINS:
-    std::printf("Input plugins:\n");
-    for (const auto &[_, p] : plugin_manager.inputs()) {
-      std::printf("----------------\n");
-      std::printf("%s\n", p.info().name);
-      std::printf("----------------\n");
-      std::printf("%s\n", p.info().description);
-      std::printf("\n");
-    }
+    Plugins::print_plugins();
     break;
 
   /* Print help */
@@ -71,9 +43,9 @@ main(int argc, char **argv) {
   /* Main process */
   case Options::Mode::PROCESS:
     try {
-      auto input = plugin_manager.create_input(options.input_plugin,
-                                               options.argument.c_str());
-      Flow::start_processor(std::move(input));
+      // auto input = plugin_manager.create_input(options.input_plugin,
+      //                                          options.argument.c_str());
+      // Flow::start_processor(std::move(input));
     } catch (const std::exception &e) {
       Log::error("Error: %s\n", e.what());
       return 2;
