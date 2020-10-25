@@ -47,6 +47,8 @@ public:
     if (_def.dst)
       digest = combine(digest, ip.dst_addr());
 
+    digest = combine(digest, ip.protocol());
+
     return digest;
   }
 

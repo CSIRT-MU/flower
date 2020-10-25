@@ -43,9 +43,7 @@ main(int argc, char **argv) {
   /* Main process */
   case Options::Mode::PROCESS:
     try {
-      // auto input = plugin_manager.create_input(options.input_plugin,
-      //                                          options.argument.c_str());
-      // Flow::start_processor(std::move(input));
+      Flow::Processor().start();
     } catch (const std::exception &e) {
       Log::error("Error: %s\n", e.what());
       return 2;

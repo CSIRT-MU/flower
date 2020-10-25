@@ -1,32 +1,36 @@
 #include <processor.hpp>
 
-#include <unordered_map>
-#include <memory>
 #include <atomic>
 #include <csignal>
-#include <chrono>
 
 #include <tins/tins.h>
 
-#include <log.hpp>
-#include <common.hpp>
 #include <options.hpp>
-#include <cache.hpp>
-#include <exporter.hpp>
-#include <buffer.hpp>
 #include <parser.hpp>
 #include <reducer.hpp>
+#include <manager.hpp>
+#include <buffer.hpp>
+#include <ipfix.hpp>
+#include <log.hpp>
 
+/* Parsers */
 #include <protocols/vxlan.hpp>
 
+/* Reducers */
 #include <flows/ip.hpp>
+#include <flows/ipv6.hpp>
+#include <flows/tcp.hpp>
+#include <flows/udp.hpp>
+#include <flows/vlan.hpp>
+#include <flows/vxlan.hpp>
 
 namespace Flow {
 
 static std::atomic<bool> running = true;
-static Cache cache;
 
-static void on_signal(int) {
+static void
+on_signal(int)
+{
   if (!running) {
     Log::info("Exiting...\n");
     std::exit(10);
@@ -37,184 +41,151 @@ static void on_signal(int) {
 }
 
 static Buffer
-prepare_values() {
+sub_template_multi_list()
+{
   auto result = Buffer{};
 
-  result.push_back_any<std::uint8_t>(255);
-  result.push_back_any<std::uint16_t>(0);
+  result.push_back_any<std::uint8_t>(0);
   result.push_back_any<std::uint8_t>(IPFIX::SEMANTIC_ORDERED);
 
   return result;
 }
 
-/**
- * Performs active timout check on record in timestamp given in arguments.
- * Active timeout is set in global options. If record timed out, it is exported
- * and then its counter is reset.
- */
-// static void active_timeout_check(Exporter &exporter, Cache::Entry &entry,
-//                                  timeval ts) {
-//   const auto active_timeout = Options::active_timeout;
-// 
-//   auto& [props, type, values] = entry->second;
-//   auto diff = ts.tv_sec - props.flow_start.tv_sec;
-// 
-//   if (diff >= active_timeout) {
-//     Log::debug("Active timeout with error %lus\n", diff - active_timeout);
-// 
-//     exporter.insert_record(type, props, values);
-//     props = {0, ts, ts};
-//   }
-// }
-// 
-// static void idle_timeout_check(Exporter &exporter, timeval ts,
-//                                std::size_t peek_interval) {
-//   static std::size_t peek_digest = 0;
-// 
-//   const auto idle_timeout = Options::idle_timeout;
-// 
-//   auto to_remove = std::vector<std::size_t>{};
-//   auto it = cache.find(peek_digest);
-// 
-//   Log::debug("Checking %lu records for idle timeout\n", peek_interval);
-//   for (std::size_t i = 0; i < peek_interval; ++i, ++it) {
-//     /* If cache is empty */
-//     if (cache.begin() == cache.end())
-//       break;
-// 
-//     if (it == cache.end())
-//       it = cache.begin();
-// 
-//     auto& [props, type, values] = it->second;
-// 
-//     auto diff = ts.tv_sec - props.flow_end.tv_sec;
-//     if (diff >= idle_timeout) {
-//       Log::debug("Idle timeout with error %lus\n", diff - idle_timeout);
-// 
-//       exporter.insert_record(type, props, values);
-//       to_remove.emplace_back(it->first);
-//     }
-//   }
-// 
-//   /* Check if next exists and set it as peek digest */
-//   if (it != cache.end()) {
-//     auto next = std::next(it);
-//     if (next != cache.end()) {
-//       peek_digest = next->first;
-//     }
-//   }
-// 
-//   /* Remove all idle timouts */
-//   for (const auto &d : to_remove) {
-//     cache.erase(d);
-//   }
-// }
+/* Processor */
 
-static void process_packet(Tins::PDU& pdu, timeval ts, Exporter& exporter) {
+Processor::Processor()
+  : _exporter(Options::options().ip_address, Options::options().port)
+  , _input(Plugins::create_input(Options::options().input_plugin,
+        Options::options().argument.c_str()))
+{
+  const auto& config = Options::config();
+
+  /* Register additional parsers */
+  Parser::register_udp_parser<Protocols::VXLAN>(Protocols::VXLAN::VXLAN_PORT);
+
+  /* Register reducers */
+  Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, config);
+  Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, config);
+  Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, config);
+  Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, config);
+  Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, config);
+  Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, config);
+
+  std::signal(SIGINT, on_signal);
+}
+
+void
+Processor::process(Tins::PDU* pdu, timeval timestamp)
+{
   auto flow_digest = std::size_t{0};
-  auto flow_values = prepare_values();
+  auto flow_values = sub_template_multi_list();
 
-  for (auto* p = &pdu; p != nullptr; p = p->inner_pdu()) {
-    const auto pdu_type = p->pdu_type();
-    const auto& reducer = Reducer::reducer(pdu_type);
-    if (!reducer)
+  for (auto* p = pdu; p != nullptr; p = p->inner_pdu()) {
+    const auto* reducer = Reducer::reducer(p->pdu_type());
+    if (reducer == nullptr)
       continue;
 
     if (!reducer->should_process())
       continue;
 
-    auto flow_type = reducer->type();
-    flow_digest = combine(flow_digest, reducer->digest(pdu));
-
-    /* Check if template exists */
-    auto template_id = exporter.get_template_id(flow_type);
-    if (template_id == 0) {
-      template_id = exporter.insert_template(flow_type, reducer->fields());
+    flow_digest = combine(flow_digest, reducer->digest(*p));
+    auto type = reducer->type();
+    auto tid = _exporter.get_template_id(type);
+    if (tid == 0) {
+      tid = _exporter.insert_template(type, reducer->fields());
     }
 
     auto values = reducer->values(*p);
-    flow_values.push_back_any<std::uint16_t>(htons(template_id));
+    flow_values.push_back_any<std::uint16_t>(htons(tid));
     flow_values.push_back_any<std::uint16_t>(htons(values.size() + 4));
     flow_values.insert(flow_values.end(), values.begin(), values.end());
   }
 
-  flow_values.set_any_at<std::uint16_t>(1, htons(flow_values.size() - 3));
-
-  if (flow_values.size() <= 4)
+  /* Check if record isn't empty */
+  if (flow_values.size() <= 2)
     return;
 
-  exporter.insert_record({1, ts, ts}, IPFIX::REASON_FORCED, flow_values);
-  exporter.flush();
+  flow_values.set_any_at<std::uint8_t>(0, flow_values.size() - 1);
+
+  auto it = _cache.insert_record(flow_digest, timestamp, flow_values);
+  check_active_timeout(timestamp, it->second);
 }
 
-static void reducers_init() {
-  Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, Options::config());
-  // Reducer::register_reducer<IPV6>(Tins::PDU::PDUType::IPv6, Options::config());
-  // Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, Options::config());
-  // Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, Options::config());
-  // Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, Options::config());
-  // Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, Options::config());
+void
+Processor::check_active_timeout(timeval now, CacheEntry& entry)
+{
+  const auto active_timeout = Options::options().active_timeout;
+  const auto diff = now.tv_sec - entry.props.flow_start.tv_sec;
 
-  Parser::register_udp_parser<Protocols::VXLAN>(Protocols::VXLAN::VXLAN_PORT);
+  if (diff < active_timeout)
+    return;
+
+  Log::debug("Active timeout with error %u\n", diff - active_timeout);
+
+  // TODO(dudoslav): Should we reset counter to 0 or 1?
+  _exporter.insert_record(entry.props, IPFIX::REASON_ACTIVE, entry.values);
+  entry.props = {0, now, now};
 }
 
-static void processor_loop(Plugins::Input& input) {
-  const auto& options = Options::options();
+void
+Processor::check_idle_timeout(timeval now, std::size_t peek_size)
+{
+  const auto idle_timeout = Options::options().idle_timeout;
 
-  auto old = std::chrono::high_resolution_clock::now();
-  auto exporter = Exporter{options.ip_address, options.port};
+  if (_cache.empty())
+    return;
 
-  std::signal(SIGINT, on_signal);
-  while (running) {
-    auto res = input.get_packet();
-    if (res.type != PACKET)
-      break;
+  for (std::size_t i = 0; i < peek_size; ++i) {
+    if (_peek_iterator == _cache.end())
+      _peek_iterator = _cache.begin();
 
-    try {
-      auto pdu = Parser::parse(res.packet.data, res.packet.caplen);
-      auto ts = timeval{res.packet.sec, res.packet.usec};
+    const auto& entry = _peek_iterator->second;
+    auto diff = now.tv_sec - entry.props.flow_end.tv_sec;
 
-      process_packet(*pdu, ts, exporter);
-
-      /* Time delta calculation */
-      auto now = std::chrono::high_resolution_clock::now();
-      auto delta = now - old;
-      old = now;
-
-      std::size_t peek_interval = std::chrono::duration_cast
-        <std::chrono::milliseconds>(delta).count();
-      peek_interval = cache.size() / 1000.f * peek_interval;
-      peek_interval = std::clamp(peek_interval, 1lu, cache.size());
-      // idle_timeout_check(exporter, ts, peek_interval);
-
-      // exporter.export_all();
-    } catch (std::runtime_error& e){
-      Log::error("%s\n", e.what());
-      return;
-    } catch (...) {
-      /* This might even catch network exceptions */
+    if (diff < idle_timeout) {
+      ++_peek_iterator;
       continue;
     }
+
+    Log::debug("Idle timeout %u with error %u\n",
+        _peek_iterator->first,
+        diff - idle_timeout);
+
+    _exporter.insert_record(entry.props, IPFIX::REASON_IDLE, entry.values);
+    _peek_iterator = _cache.erase(_peek_iterator);
   }
-
-  /* Flush flow cache */
-  // for (auto& [_, r] : cache) {
-  //   auto& [props, type, values] = r;
-
-  //   exporter.insert_record(type, props, values);
-  // }
-
-  // exporter.export_all();
 }
 
-/**
- * Starts the packet processing loop. The packets to process
- * are capture by using input plugin.
- * @param input Input plugin to use to get packets to process
- */
-void start_processor(Plugins::Input input) {
-  reducers_init();
-  processor_loop(input);
+void
+Processor::start()
+{
+  running = true;
+
+  while (running) {
+    auto result = _input.get_packet();
+
+    if (result.type != PACKET)
+      break;
+
+    /* Parse packet */
+    auto pdu = Parser::parse(result.packet.data, result.packet.caplen);
+    auto timestamp = timeval{result.packet.sec, result.packet.usec};
+    
+    /* If failed to parse packet */
+    if (pdu == nullptr)
+      continue;
+
+    process(pdu.get(), timestamp);
+    check_idle_timeout(timestamp, 10);
+  }
+
+  /* Flush cache */
+  for (auto& [_, entry] : _cache) {
+    _exporter.insert_record(entry.props, IPFIX::REASON_FORCED, entry.values);
+  }
+
+  /* Flush exporter */
+  _exporter.flush();
 }
 
 } // namespace Flow

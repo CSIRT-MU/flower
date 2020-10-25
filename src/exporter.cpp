@@ -1,6 +1,7 @@
 #include <exporter.hpp>
 
 #include <common.hpp>
+#include <log.hpp>
 
 namespace Flow {
 
@@ -98,7 +99,8 @@ void
 Exporter::insert_record(
     const IPFIX::Properties& props, std::uint8_t reason, Buffer values)
 {
-  if (_buffer.capacity() < values.size() + sizeof(RecordHeader))
+  if (_buffer.capacity() - _buffer.size() 
+      < values.size() + 33 + sizeof(RecordHeader))
     flush();
 
   _buffer.push_back_any<RecordHeader>({
@@ -123,6 +125,8 @@ Exporter::insert_record(
 void
 Exporter::flush()
 {
+  Log::debug("Flushing exporter %u bytes\n", _buffer.size());
+
   _buffer.set_any_at<MessageHeader>(0, {
       htons(IPFIX::VERSION),
       htons(_buffer.size()),
