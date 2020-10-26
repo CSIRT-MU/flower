@@ -26,6 +26,7 @@
 #include <flows/vxlan.hpp>
 #include <flows/gre.hpp>
 #include <flows/mpls.hpp>
+#include <flows/ethernet.hpp>
 
 namespace Flow {
 
@@ -76,6 +77,7 @@ Processor::Processor()
   Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, config);
   Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, config);
   Reducer::register_reducer<MPLS>(Tins::PDU::PDUType::MPLS, config);
+  Reducer::register_reducer<ETHERNET>(Tins::PDU::PDUType::ETHERNET_II, config);
   Reducer::register_reducer<GRE>(Protocols::GREPDU_TYPE, config);
   Reducer::register_reducer<VXLAN>(Protocols::VXLANPDU_TYPE, config);
 

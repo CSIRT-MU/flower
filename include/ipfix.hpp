@@ -19,6 +19,7 @@ static constexpr std::uint16_t TYPE_32 = 4;
 static constexpr std::uint16_t TYPE_64 = 8;
 static constexpr std::uint16_t TYPE_IPV4 = TYPE_32;
 static constexpr std::uint16_t TYPE_IPV6 = 16;
+static constexpr std::uint16_t TYPE_MAC = 6;
 static constexpr std::uint16_t TYPE_SECONDS = TYPE_32;
 static constexpr std::uint16_t TYPE_MILLISECONDS = TYPE_64;
 static constexpr std::uint16_t TYPE_MICROSECONDS = TYPE_64;
@@ -38,7 +39,9 @@ static constexpr std::uint16_t FIELD_DST_IP6_ADDR = 28;
 static constexpr std::uint16_t FIELD_SRC_PORT = 7;
 static constexpr std::uint16_t FIELD_DST_PORT = 11;
 static constexpr std::uint16_t FIELD_VLAN_ID = 58;
+static constexpr std::uint16_t FIELD_SRC_MAC_ADDR = 56;
 static constexpr std::uint16_t FIELD_IP_VERSION = 60;
+static constexpr std::uint16_t FIELD_DST_MAC_ADDR = 80;
 static constexpr std::uint16_t FIELD_FLOW_END_REASON = 136;
 static constexpr std::uint16_t FIELD_FLOW_START_SECONDS = 150;
 static constexpr std::uint16_t FIELD_FLOW_END_SECONDS = 151;
@@ -72,7 +75,8 @@ enum class Type {
   DOT1Q,
   MPLS = PROTOCOL_MPLS,
   VXLAN,
-  GRE = PROTOCOL_GRE
+  GRE = PROTOCOL_GRE,
+  ETHERNET
 };
 
 struct Properties {
