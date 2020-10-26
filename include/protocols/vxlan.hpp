@@ -11,7 +11,7 @@ namespace Protocols {
 /*
  * A PDU for VXLAN protocol
  */
-class VXLAN : public Tins::PDU {
+class VXLANPDU : public Tins::PDU {
   std::vector<std::uint8_t> _buffer;
   std::uint32_t _vni;
 public:
@@ -19,15 +19,15 @@ public:
 
   static const PDU::PDUType pdu_flag;
 
-  VXLAN(const uint8_t* data, uint32_t sz) : _buffer(data, data + sz){
+  VXLANPDU(const uint8_t* data, uint32_t sz) : _buffer(data, data + 8){
     std::memcpy(&_vni, data + 4, 4);
     _vni = ntohl(_vni) >> 8;
 
     inner_pdu(new Tins::EthernetII{data + 8, sz - 8});
   }
 
-  VXLAN* clone() const {
-    return new VXLAN(*this);
+  VXLANPDU* clone() const {
+    return new VXLANPDU(*this);
   }
 
   uint32_t header_size() const {
@@ -47,7 +47,7 @@ public:
   }
 };
 
-static constexpr auto VXLAN_PDU = static_cast<Tins::PDU::PDUType>(Tins::PDU::USER_DEFINED_PDU + 1);
-const Tins::PDU::PDUType VXLAN::pdu_flag = VXLAN_PDU;
+static constexpr auto VXLANPDU_TYPE = static_cast<Tins::PDU::PDUType>(Tins::PDU::USER_DEFINED_PDU + 1);
+const Tins::PDU::PDUType VXLANPDU::pdu_flag = VXLANPDU_TYPE;
 
 }

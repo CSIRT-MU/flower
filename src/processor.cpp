@@ -14,6 +14,7 @@
 #include <log.hpp>
 
 /* Parsers */
+#include <protocols/gre.hpp>
 #include <protocols/vxlan.hpp>
 
 /* Reducers */
@@ -23,6 +24,7 @@
 #include <flows/udp.hpp>
 #include <flows/vlan.hpp>
 #include <flows/vxlan.hpp>
+#include <flows/gre.hpp>
 
 namespace Flow {
 
@@ -61,7 +63,10 @@ Processor::Processor()
   const auto& config = Options::config();
 
   /* Register additional parsers */
-  Parser::register_udp_parser<Protocols::VXLAN>(Protocols::VXLAN::VXLAN_PORT);
+  Parser::register_tins_parser<Tins::IP, Protocols::GREPDU>(
+      IPFIX::PROTOCOL_GRE);
+  Parser::register_udp_parser<Protocols::VXLANPDU>(
+      Protocols::VXLANPDU::VXLAN_PORT);
 
   /* Register reducers */
   Reducer::register_reducer<IP>(Tins::PDU::PDUType::IP, config);
@@ -69,7 +74,8 @@ Processor::Processor()
   Reducer::register_reducer<TCP>(Tins::PDU::PDUType::TCP, config);
   Reducer::register_reducer<UDP>(Tins::PDU::PDUType::UDP, config);
   Reducer::register_reducer<VLAN>(Tins::PDU::PDUType::DOT1Q, config);
-  Reducer::register_reducer<VXLAN>(Protocols::VXLAN_PDU, config);
+  Reducer::register_reducer<GRE>(Protocols::GREPDU_TYPE, config);
+  Reducer::register_reducer<VXLAN>(Protocols::VXLANPDU_TYPE, config);
 
   std::signal(SIGINT, on_signal);
 }

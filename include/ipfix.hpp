@@ -46,6 +46,7 @@ static constexpr std::uint16_t FIELD_FLOW_START_MILLISECONDS = 152;
 static constexpr std::uint16_t FIELD_FLOW_END_MILLISECONDS = 153;
 static constexpr std::uint16_t FIELD_FLOW_START_MICROSECONDS = 154;
 static constexpr std::uint16_t FIELD_FLOW_END_MICROSECONDS = 155;
+static constexpr std::uint16_t FIELD_ETHERNET_TYPE = 256;
 static constexpr std::uint16_t FIELD_SUB_TEMPLATE_MULTI_LIST = 293;
 static constexpr std::uint16_t FIELD_LAYER2_SEGEMENT_ID = 351;
 
@@ -69,7 +70,8 @@ enum class Type {
   UDP = PROTOCOL_UDP,
   DOT1Q,
   MPLS = PROTOCOL_MPLS,
-  VXLAN 
+  VXLAN,
+  GRE = PROTOCOL_GRE
 };
 
 struct Properties {

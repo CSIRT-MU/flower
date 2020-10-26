@@ -29,6 +29,13 @@ register_udp_parser(std::uint16_t port)
   insert_udp_parser(port, &default_parser<T>);
 }
 
+template<typename T, typename U>
+void
+register_tins_parser(std::size_t id)
+{
+  Tins::Allocators::register_allocator<T, U>(id);
+}
+
 /**
  * Parse raw packet buffer into Tins::PDU.
  */

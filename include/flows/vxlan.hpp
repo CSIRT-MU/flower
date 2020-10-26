@@ -39,7 +39,7 @@ public:
   std::size_t digest(const Tins::PDU& pdu) const override {
     auto digest = std::size_t{type()};
 
-    const auto& vxlan = static_cast<const Protocols::VXLAN&>(pdu);
+    const auto& vxlan = static_cast<const Protocols::VXLANPDU&>(pdu);
 
     if (_def.vni)
       digest = combine(digest, vxlan.vni());
@@ -59,7 +59,7 @@ public:
   }
 
   Buffer values(const Tins::PDU& pdu) const override {
-    const auto& vxlan = static_cast<const Protocols::VXLAN&>(pdu);
+    const auto& vxlan = static_cast<const Protocols::VXLANPDU&>(pdu);
     auto values = Buffer{};
 
     if (_def.vni) {
