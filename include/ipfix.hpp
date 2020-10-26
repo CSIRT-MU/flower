@@ -48,6 +48,7 @@ static constexpr std::uint16_t FIELD_FLOW_START_MICROSECONDS = 154;
 static constexpr std::uint16_t FIELD_FLOW_END_MICROSECONDS = 155;
 static constexpr std::uint16_t FIELD_ETHERNET_TYPE = 256;
 static constexpr std::uint16_t FIELD_SUB_TEMPLATE_MULTI_LIST = 293;
+static constexpr std::uint16_t FIELD_MPLS_LABEL_STACK_SECTION = 316;
 static constexpr std::uint16_t FIELD_LAYER2_SEGEMENT_ID = 351;
 
 /* Protocol identifiers */
