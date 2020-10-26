@@ -159,6 +159,9 @@ Processor::check_idle_timeout(timeval now, std::size_t peek_size)
 void
 Processor::start()
 {
+  using namespace std::chrono;
+  
+  _time_point = high_resolution_clock::now();
   running = true;
 
   while (running) {
@@ -176,7 +179,14 @@ Processor::start()
       continue;
 
     process(pdu.get(), timestamp);
-    check_idle_timeout(timestamp, 10);
+
+    /* Calculate time delta */
+    auto now = high_resolution_clock::now();
+    auto delta = duration<double, std::milli>(now - _time_point).count();
+    _time_point = now;
+
+    /* Perform idle check. Check the whole cache each second */
+    check_idle_timeout(timestamp, (delta / 1000.f) * _cache.size());
   }
 
   /* Flush cache */

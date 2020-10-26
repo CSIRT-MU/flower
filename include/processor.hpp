@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #include <cache.hpp>
 #include <exporter.hpp>
 #include <input.hpp>
@@ -16,6 +18,7 @@ class Processor {
   Exporter _exporter;
   Plugins::Input _input;
   Cache::iterator _peek_iterator;
+  std::chrono::time_point<std::chrono::high_resolution_clock> _time_point;
 
   void process(Tins::PDU*, timeval);
   void check_idle_timeout(timeval, std::size_t);
