@@ -37,7 +37,7 @@ public:
     _finalize(_plugin.function<FinalizeFun>(FINALIZE_FUNCTION)),
     _get_packet(_plugin.function<GetPacketFun>(GET_PACKET_FUNCTION)) {
       auto result = _init(arg);
-      if (result.type == ERROR) {
+      if (result.type == RESULT_ERROR) {
         throw std::runtime_error{result.error_msg};
       }
     }

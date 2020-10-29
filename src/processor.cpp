@@ -177,7 +177,7 @@ Processor::start()
   while (running) {
     auto result = _input.get_packet();
 
-    if (result.type != PACKET)
+    if (result.type != CAPTURE_PACKET)
       break;
 
     /* Parse packet */

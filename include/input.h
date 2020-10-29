@@ -34,21 +34,21 @@ struct Packet {
   unsigned int usec;
 };
 
-enum InitResultType {
-  OK,
-  ERROR
+enum ResultType {
+  RESULT_OK,
+  RESULT_ERROR
 };
 
 struct InitResult {
-  enum InitResultType type;
+  enum ResultType type;
   const char* error_msg;
 };
 
 enum GetPacketResultType {
-  TIMEOUT,
-  END_OF_INPUT,
-  PACKET,
-  INPUT_ERROR
+  CAPTURE_PACKET = 0,
+  CAPTURE_TIMEOUT,
+  CAPTURE_END_OF_INPUT,
+  CAPTURE_INPUT_ERROR
 };
 
 struct GetPacketResult {
