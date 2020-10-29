@@ -4,7 +4,6 @@
 
 #include <cache.hpp>
 #include <exporter.hpp>
-#include <input.hpp>
 
 namespace Tins {
   class PDU;
@@ -16,7 +15,6 @@ class Processor {
 
   Cache _cache;
   Exporter _exporter;
-  Plugins::Input _input;
   Cache::iterator _peek_iterator;
   std::chrono::time_point<std::chrono::high_resolution_clock> _time_point;
 

@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <thread>
 
 #include <tins/tins.h>
 
@@ -12,6 +13,7 @@
 #include <buffer.hpp>
 #include <ipfix.hpp>
 #include <log.hpp>
+#include <queue.hpp>
 
 /* Parsers */
 #include <protocols/gre.hpp>
@@ -59,8 +61,6 @@ sub_template_multi_list()
 
 Processor::Processor()
   : _exporter(Options::options().ip_address, Options::options().port)
-  , _input(Plugins::create_input(Options::options().input_plugin,
-        Options::options().argument.c_str()))
 {
   const auto& config = Options::config();
 
@@ -166,29 +166,63 @@ Processor::check_idle_timeout(timeval now, std::size_t peek_size)
   }
 }
 
+static void
+capture_worker(Async::Queue<Tins::Packet>& queue)
+{
+  auto input = Plugins::create_input(Options::options().input_plugin,
+      Options::options().argument.c_str());
+
+  while (running) {
+    auto result = input.get_packet();
+
+    if (result.type != CAPTURE_PACKET) {
+      running = false;
+      break;
+    }
+
+    auto pdu = Parser::parse(result.packet.data, result.packet.caplen);
+    auto timestamp = timeval{result.packet.sec, result.packet.usec};
+
+    if (pdu == nullptr)
+      continue;
+
+    queue.push(Tins::Packet{pdu.release(), timestamp});
+  }
+}
+
+static timeval
+timestamp_to_timeval(const Tins::Timestamp& timestamp)
+{
+  return {
+    timestamp.seconds(), timestamp.microseconds()
+  };
+}
+
 void
 Processor::start()
 {
   using namespace std::chrono;
   
   _time_point = high_resolution_clock::now();
+  auto queue = Async::Queue<Tins::Packet>{};
+
   running = true;
 
+  /* Start packet capture and parsing thread */
+  auto capture_thread = std::thread(capture_worker, std::ref(queue));
+
+  /* Start packet reducing loop */
   while (running) {
-    auto result = _input.get_packet();
-
-    if (result.type != CAPTURE_PACKET)
-      break;
-
-    /* Parse packet */
-    auto pdu = Parser::parse(result.packet.data, result.packet.caplen);
-    auto timestamp = timeval{result.packet.sec, result.packet.usec};
-    
-    /* If failed to parse packet */
-    if (pdu == nullptr)
+    if (!queue.wait_for(seconds(1))) {
+      check_idle_timeout(
+          timestamp_to_timeval(Tins::Timestamp::current_time()), _cache.size());
+      _time_point = high_resolution_clock::now();
       continue;
+    }
 
-    process(pdu.get(), timestamp);
+    auto packet = queue.pop();
+
+    process(packet.pdu(), timestamp_to_timeval(packet.timestamp()));
 
     /* Calculate time delta */
     auto now = high_resolution_clock::now();
@@ -196,7 +230,9 @@ Processor::start()
     _time_point = now;
 
     /* Perform idle check. Check the whole cache each second */
-    check_idle_timeout(timestamp, (delta / 1000.f) * _cache.size());
+    check_idle_timeout(
+        timestamp_to_timeval(packet.timestamp()),
+        (delta / 1000.f) * _cache.size());
   }
 
   /* Flush cache */
@@ -206,6 +242,9 @@ Processor::start()
 
   /* Flush exporter */
   _exporter.flush();
+
+  /* Join the thread that handles packet capture */
+  capture_thread.join();
 }
 
 } // namespace Flow
