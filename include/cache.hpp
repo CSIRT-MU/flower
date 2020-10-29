@@ -16,6 +16,7 @@ struct CacheEntry {
 class Cache : public std::unordered_map<std::size_t, CacheEntry> {
 public:
   iterator insert_record(std::size_t, timeval, Buffer);
+  void update_record(iterator, timeval);
 };
 
 } // namespace Flow

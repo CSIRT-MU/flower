@@ -88,8 +88,8 @@ void
 Processor::process(Tins::PDU* pdu, timeval timestamp)
 {
   auto flow_digest = std::size_t{0};
-  auto flow_values = sub_template_multi_list();
 
+  /* Generate digest */
   for (auto* p = pdu; p != nullptr; p = p->inner_pdu()) {
     const auto* reducer = Reducer::reducer(p->pdu_type());
     if (reducer == nullptr)
@@ -99,6 +99,26 @@ Processor::process(Tins::PDU* pdu, timeval timestamp)
       continue;
 
     flow_digest = combine(flow_digest, reducer->digest(*p));
+  }
+
+  /* If the digest is already in cache */
+  auto search = _cache.find(flow_digest);
+  if (search != _cache.end()) {
+    _cache.update_record(search, timestamp);
+    return;
+  }
+
+  auto flow_values = sub_template_multi_list();
+
+  /* Generate values */
+  for (auto* p = pdu; p != nullptr; p = p->inner_pdu()) {
+    const auto* reducer = Reducer::reducer(p->pdu_type());
+    if (reducer == nullptr)
+      continue;
+
+    if (!reducer->should_process())
+      continue;
+
     auto type = reducer->type();
     auto tid = _exporter.get_template_id(type);
     if (tid == 0) {
@@ -186,7 +206,7 @@ capture_worker(Async::Queue<Tins::Packet>& queue)
     if (pdu == nullptr)
       continue;
 
-    queue.push(Tins::Packet{pdu.release(), timestamp});
+    queue.push(Tins::Packet{std::move(*pdu), timestamp});
   }
 }
 
@@ -220,6 +240,7 @@ Processor::start()
       continue;
     }
 
+    /* Get packet from parsed packets queue */
     auto packet = queue.pop();
 
     process(packet.pdu(), timestamp_to_timeval(packet.timestamp()));
