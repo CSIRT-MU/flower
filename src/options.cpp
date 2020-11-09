@@ -14,10 +14,10 @@ static auto app_options = Options{
   "",
   "./plugins",
   "FileInput",
-  600,
-  300,
+  120,
+  15,
   "127.0.0.1",
-  20'000
+  4'739
 };
 
 static auto config_file = toml::value{};

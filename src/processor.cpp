@@ -58,7 +58,6 @@ sub_template_multi_list()
 }
 
 /* Processor */
-
 Processor::Processor()
   : _exporter(Options::options().ip_address, Options::options().port)
 {
@@ -232,37 +231,43 @@ Processor::start()
   auto capture_thread = std::thread(capture_worker, std::ref(queue));
 
   /* Start packet reducing loop */
-  while (running) {
-    if (!queue.wait_for(seconds(1))) {
+  try {
+    while (running) {
+      if (!queue.wait_for(seconds(1))) {
+        check_idle_timeout(
+            timestamp_to_timeval(Tins::Timestamp::current_time()), _cache.size());
+        _time_point = high_resolution_clock::now();
+        continue;
+      }
+
+      /* Get packet from parsed packets queue */
+      auto packet = queue.pop();
+
+      process(packet.pdu(), timestamp_to_timeval(packet.timestamp()));
+
+      /* Calculate time delta */
+      auto now = high_resolution_clock::now();
+      auto delta = duration<double, std::milli>(now - _time_point).count();
+      _time_point = now;
+
+      /* Perform idle check. Check the whole cache each second */
       check_idle_timeout(
-          timestamp_to_timeval(Tins::Timestamp::current_time()), _cache.size());
-      _time_point = high_resolution_clock::now();
-      continue;
+          timestamp_to_timeval(packet.timestamp()),
+          (delta / 1000.f) * _cache.size());
     }
 
-    /* Get packet from parsed packets queue */
-    auto packet = queue.pop();
+    /* Flush cache */
+    for (auto& [_, entry] : _cache) {
+      _exporter.insert_record(entry.props, IPFIX::REASON_FORCED, entry.values);
+    }
 
-    process(packet.pdu(), timestamp_to_timeval(packet.timestamp()));
-
-    /* Calculate time delta */
-    auto now = high_resolution_clock::now();
-    auto delta = duration<double, std::milli>(now - _time_point).count();
-    _time_point = now;
-
-    /* Perform idle check. Check the whole cache each second */
-    check_idle_timeout(
-        timestamp_to_timeval(packet.timestamp()),
-        (delta / 1000.f) * _cache.size());
+    /* Flush exporter */
+    _exporter.flush();
+  } catch (const std::exception& e) {
+    /* On exception, the connection may have closed */
+    Log::error("%s\n", e.what());
+    running = false;
   }
-
-  /* Flush cache */
-  for (auto& [_, entry] : _cache) {
-    _exporter.insert_record(entry.props, IPFIX::REASON_FORCED, entry.values);
-  }
-
-  /* Flush exporter */
-  _exporter.flush();
 
   /* Join the thread that handles packet capture */
   capture_thread.join();

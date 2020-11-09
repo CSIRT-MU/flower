@@ -7,7 +7,6 @@
 
 int
 main(int argc, char **argv) {
-
   const auto *home = std::getenv("HOME");
   auto home_config = std::string{home} + "/." + Options::CONFIG_NAME;
 
