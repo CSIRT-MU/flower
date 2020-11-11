@@ -5,3 +5,6 @@ target_include_directories(file_provider PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 add_library(interface_provider MODULE interface_provider.c)
 target_include_directories(interface_provider PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+install(TARGETS file_provider DESTINATION var/flower/plugins)
+install(TARGETS interface_provider DESTINATION var/flower/plugins)

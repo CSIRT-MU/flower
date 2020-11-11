@@ -4,6 +4,7 @@
 #include <manager.hpp>
 #include <options.hpp>
 #include <processor.hpp>
+#include <config.h>
 
 int
 main(int argc, char **argv) {
@@ -36,7 +37,7 @@ main(int argc, char **argv) {
 
   /* Print version */
   case Options::Mode::PRINT_VERSION:
-    std::printf("version 1.0.0\n");
+    std::printf("version %u.%u\n", flower_VERSION_MAJOR, flower_VERSION_MINOR);
     break;
 
   /* Main process */

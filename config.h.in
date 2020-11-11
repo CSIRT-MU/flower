@@ -1,0 +1,5 @@
+#pragma once
+
+#define flower_VERSION_MAJOR @flower_VERSION_MAJOR@
+#define flower_VERSION_MINOR @flower_VERSION_MINOR@
+#define INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
