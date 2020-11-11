@@ -4,10 +4,12 @@
 
 #include <toml.hpp>
 
+#include <config.h>
+
 namespace Options {
 
 constexpr static auto CONFIG_NAME = "flower.conf";
-static constexpr auto SYSTEM_PLUGINS_DIR = "/var/flower/plugins";
+static constexpr auto SYSTEM_PLUGINS_DIR = INSTALL_PREFIX "/var/flower/plugins";
 
 enum class Mode {
   PRINT_PLUGINS,
