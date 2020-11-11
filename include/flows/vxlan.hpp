@@ -28,18 +28,18 @@ public:
     }
   }
 
-  bool should_process() override {
+  bool should_process() const override {
     return _def.process;
   }
 
-  std::size_t type() override {
+  std::size_t type() const override {
     return ttou(IPFIX::Type::VXLAN);
   }
 
-  std::size_t digest(const Tins::PDU& pdu) override {
+  std::size_t digest(const Tins::PDU& pdu) const override {
     auto digest = std::size_t{type()};
 
-    const auto& vxlan = static_cast<const Protocols::VXLAN&>(pdu);
+    const auto& vxlan = static_cast<const Protocols::VXLANPDU&>(pdu);
 
     if (_def.vni)
       digest = combine(digest, vxlan.vni());
@@ -47,32 +47,24 @@ public:
     return digest;
   }
 
-  std::vector<std::byte> fields() override {
-    auto fields = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(fields);
+  Buffer fields() const override {
+    auto fields = Buffer{};
 
     if (_def.vni) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_LAYER2_SEGEMENT_ID),
-        htons(IPFIX::TYPE_64)
-      };
-      auto fp = reinterpret_cast<std::byte*>(&f);
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_LAYER2_SEGEMENT_ID));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_64));
     }
 
     return fields;
   }
 
-  std::vector<std::byte> values(const Tins::PDU& pdu) override {
-    const auto& vxlan = static_cast<const Protocols::VXLAN&>(pdu);
-    auto values = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(values);
+  Buffer values(const Tins::PDU& pdu) const override {
+    const auto& vxlan = static_cast<const Protocols::VXLANPDU&>(pdu);
+    auto values = Buffer{};
 
     if (_def.vni) {
-      uint64_t segment_id = (uint64_t{0x01} << 56) + vxlan.vni();
-      segment_id = htonT(segment_id);
-      auto vp = reinterpret_cast<const std::byte*>(&segment_id);
-      std::copy_n(vp, IPFIX::TYPE_64, bkit);
+      values.push_back_any<std::uint64_t>(
+          htonT((uint64_t{0x01} << 56) + vxlan.vni()));
     }
 
     return values;

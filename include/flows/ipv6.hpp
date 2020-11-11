@@ -28,15 +28,15 @@ public:
     }
   }
 
-  bool should_process() override {
+  bool should_process() const override {
     return _def.process;
   }
 
-  std::size_t type() override {
+  std::size_t type() const override {
     return ttou(IPFIX::Type::IPV6);
   }
 
-  std::size_t digest(const Tins::PDU& pdu) override {
+  std::size_t digest(const Tins::PDU& pdu) const override {
     auto digest = std::size_t{type()};
 
     const auto& ipv6 = static_cast<const Tins::IPv6&>(pdu);
@@ -53,44 +53,36 @@ public:
       }
     }
 
+    digest = combine(digest, ipv6.next_header());
+
     return digest;
   }
 
-  std::vector<std::byte> fields() override {
-    auto fields = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(fields);
+  Buffer fields() const override {
+    auto fields = Buffer{};
 
     if (_def.src) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_SRC_IP6_ADDR),
-        htons(IPFIX::TYPE_IPV6)
-      };
-      const auto* fp = reinterpret_cast<std::byte*>(f.data());
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_SRC_IP6_ADDR));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_IPV6));
     }
 
     if (_def.dst) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_DST_IP6_ADDR),
-        htons(IPFIX::TYPE_IPV6)
-      };
-      const auto* fp = reinterpret_cast<std::byte*>(f.data());
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_DST_IP6_ADDR));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_IPV6));
     }
 
-    auto f = std::array{
-      htons(IPFIX::FIELD_IP_VERSION),
-      htons(IPFIX::TYPE_8)
-    };
-    const auto* fp = reinterpret_cast<std::byte*>(f.data());
-    std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_IP_VERSION));
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_8));
+
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER));
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_8));
 
     return fields;
   }
 
-  std::vector<std::byte> values(const Tins::PDU& pdu) override {
+  Buffer values(const Tins::PDU& pdu) const override {
     const auto& ipv6 = static_cast<const Tins::IPv6&>(pdu);
-    auto values = std::vector<std::byte>{};
+    auto values = Buffer{};
     auto bkit = std::back_inserter(values);
 
     if (_def.src) {
@@ -103,9 +95,8 @@ public:
           IPFIX::TYPE_IPV6, bkit);
     }
 
-    uint8_t version = htonT(ipv6.version());
-    const auto* vp = reinterpret_cast<std::byte*>(&version);
-    std::copy_n(vp, IPFIX::TYPE_8, bkit);
+    values.push_back_any<std::uint8_t>(ipv6.version());
+    values.push_back_any<std::uint8_t>(ipv6.next_header());
 
     return values;
   }

@@ -28,15 +28,15 @@ public:
     }
   }
 
-  bool should_process() override {
+  bool should_process() const override {
     return _def.process;
   }
 
-  std::size_t type() override {
+  std::size_t type() const override {
     return ttou(IPFIX::Type::TCP);
   }
 
-  std::size_t digest(const Tins::PDU& pdu) override {
+  std::size_t digest(const Tins::PDU& pdu) const override {
     auto digest = std::size_t{type()};
 
     const auto& tcp = static_cast<const Tins::TCP&>(pdu);
@@ -50,58 +50,33 @@ public:
     return digest;
   }
 
-  std::vector<std::byte> fields() override {
-    auto fields = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(fields);
+  Buffer fields() const override {
+    auto fields = Buffer{};
 
     if (_def.src) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_SRC_PORT),
-        htons(IPFIX::TYPE_16)
-      };
-      const auto* fp = reinterpret_cast<std::byte*>(f.data());
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_SRC_PORT));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_16));
     }
 
     if (_def.dst) {
-      auto f = std::array{
-        htons(IPFIX::FIELD_DST_PORT),
-        htons(IPFIX::TYPE_16)
-      };
-      const auto* fp = reinterpret_cast<std::byte*>(f.data());
-      std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_DST_PORT));
+      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_16));
     }
-
-    auto f = std::array{
-      htons(IPFIX::FIELD_PROTOCOL_IDENTIFIER),
-      htons(IPFIX::TYPE_8)
-    };
-    const auto* fp = reinterpret_cast<std::byte*>(f.data());
-    std::copy_n(fp, IPFIX::TYPE_16 * 2, bkit);
 
     return fields;
   }
 
-  std::vector<std::byte> values(const Tins::PDU& pdu) override {
+  Buffer values(const Tins::PDU& pdu) const override {
     const auto& tcp = static_cast<const Tins::TCP&>(pdu);
-    auto values = std::vector<std::byte>{};
-    auto bkit = std::back_inserter(values);
+    auto values = Buffer{};
 
     if (_def.src) {
-      uint16_t src = htons(tcp.sport());
-      const auto* vp = reinterpret_cast<std::byte*>(&src);
-      std::copy_n(vp, IPFIX::TYPE_16, bkit);
+      values.push_back_any<std::uint16_t>(htons(tcp.sport()));
     }
 
     if (_def.dst) {
-      uint16_t dst = htons(tcp.dport());
-      const auto* vp = reinterpret_cast<std::byte*>(&dst);
-      std::copy_n(vp, IPFIX::TYPE_16, bkit);
+      values.push_back_any<std::uint16_t>(htons(tcp.dport()));
     }
-
-    uint8_t protocol = IPFIX::PROTOCOL_TCP;
-    auto vp = reinterpret_cast<const std::byte*>(&protocol);
-    std::copy_n(vp, IPFIX::TYPE_8, bkit);
 
     return values;
   }

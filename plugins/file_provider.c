@@ -5,43 +5,50 @@
 static pcap_t *handle;
 static char errbuf[PCAP_ERRBUF_SIZE];
 
-InfoRT info() {
-  struct PluginInfo result;
-  result.type = INPUT_PLUGIN;
-  result.name = "FileInput";
-  result.description = "Input from file in cap/pcap format\n"
-                       "The argument is a path to the cap/pcap file\n";
-  return result;
+InfoRT
+info()
+{
+  return (InfoRT){
+    "FileInput",
+    INPUT_PLUGIN,
+    "Input from file in cap/pcap format\n"
+    "The argument is a path to the cap/pcap file\n"
+  };
 }
 
-InitRT init(const char *arg) {
-  struct InitResult result = {OK, NULL};
+InitRT
+init(const char *arg)
+{
   handle = pcap_open_offline(arg, errbuf);
 
-  if (handle) {
-    return result;
-  } else {
-    result.type = ERROR;
-    result.error_msg = errbuf;
-    return result;
+  if (!handle) {
+    return (InitRT){RESULT_ERROR, errbuf};
   }
+
+  return (InitRT){RESULT_OK, ""};
 }
 
-FinalizeRT finalize() { pcap_close(handle); }
+FinalizeRT
+finalize()
+{
+  pcap_close(handle);
+}
 
-GetPacketRT get_packet() {
+GetPacketRT
+get_packet()
+{
   struct pcap_pkthdr header;
   const u_char *data = pcap_next(handle, &header);
-  struct GetPacketResult result = {END_OF_INPUT, {}};
 
-  if (!data)
-    return result;
-  result.type = PACKET;
-  result.packet.data = data;
-  result.packet.len = header.len;
-  result.packet.caplen = header.caplen;
-  result.packet.sec = header.ts.tv_sec;
-  result.packet.usec = header.ts.tv_usec;
+  if (data) {
+    return (GetPacketRT){CAPTURE_PACKET, {
+      data,
+      header.len,
+      header.caplen,
+      header.ts.tv_sec,
+      header.ts.tv_usec
+    }};
+  }
 
-  return result;
+  return (GetPacketRT){CAPTURE_END_OF_INPUT, {}};
 }

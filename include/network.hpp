@@ -176,7 +176,7 @@ class Connection {
         sent < size;
         n = send(_socket.descriptor(),
           data + sent, // NOLINT: Pointer arithmetics are required
-          size - sent, 0)) {
+          size - sent, MSG_NOSIGNAL)) {
       if (n == -1) {
         if (errno == EAGAIN) {
           continue;

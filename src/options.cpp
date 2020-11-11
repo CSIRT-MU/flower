@@ -1,50 +1,60 @@
 #include <options.hpp>
 
 #include <iostream>
+#include <filesystem>
 
 #include <clipp.h>
-#include <toml.hpp>
 
 #include <log.hpp>
 
 namespace Options {
 
-// OPTIONS
-Mode mode = Mode::PRINT_HELP;
-std::string argument = "";
-std::string plugins_dir = "./plugins";
-std::string input_plugin = "FileInput";
-unsigned int active_timeout = 600;
-unsigned int idle_timeout = 300;
-std::string ip_address = "127.0.0.1";
-short port = 20'000;
+static auto app_options = Options{
+  Mode::PRINT_HELP,
+  "",
+  "./plugins",
+  "FileInput",
+  120,
+  15,
+  "127.0.0.1",
+  4'739
+};
+
+static auto config_file = toml::value{};
+
+/* Define CLI */
 
 using namespace clipp;
 
-static toml::value toml_file;
-
 static auto mode_process = "Process options:"
   % (
-      command("process").set(mode, Mode::PROCESS),
-      value("plugin_argument", argument)
+      command("process").set(app_options.mode, Mode::PROCESS),
+      value("plugin_argument", app_options.argument)
       % "Argument plugin depends on plugin implementation",
-      (option("-I", "--input_plugin") & value("plugin_name", input_plugin))
+
+      (option("-I", "--input_plugin")
+      & value("plugin_name", app_options.input_plugin))
       % "Input plugin name to use [default: FileInput]",
-      (option("-a", "--active_timeout") & value("seconds", active_timeout))
+
+      (option("-a", "--active_timeout")
+      & value("seconds", app_options.active_timeout))
       % "Active timeout, after which the flow should be exported",
-      (option("-i", "--idle_timeout") & value("seconds", idle_timeout))
+
+      (option("-i", "--idle_timeout")
+      & value("seconds", app_options.idle_timeout))
       % "Idle timeout, after which the flow should be exported",
-      (option("-o", "--ip_address") & value("address", ip_address))
+
+      (option("-o", "--ip_address")
+      & value("address", app_options.ip_address))
       % "IP address of IPFIX collector",
-      (option("-p", "--port") & value("port", port))
+
+      (option("-p", "--port")
+      & value("port", app_options.port))
       % "TCP port of IPFIX collector"
     );
 
 static auto mode_print_plugins = "Prints all available plugins"
-  % (command("plugins").set(mode, Mode::PRINT_PLUGINS));
-
-static auto mode_print_config = "Prints current program configuration"
-  % (command("config").set(mode, Mode::PRINT_CONFIG));
+  % (command("plugins").set(app_options.mode, Mode::PRINT_PLUGINS));
 
 static auto logging_flags = "Logging options:"
   % (
@@ -59,7 +69,8 @@ static auto logging_flags = "Logging options:"
     );
 
 static auto plugins_flags = (
-    option("--plugins_dir") & value("directory", plugins_dir)
+    (option("--plugins_dir")
+    & value("directory", app_options.plugins_dir))
     % "Set plugins directory"
     );
 
@@ -68,37 +79,62 @@ static auto cli = (
     plugins_flags,
     mode_process
     | mode_print_plugins
-    | (command("-h", "--help") >> set(mode, Mode::PRINT_HELP))
+    | (command("-h", "--help") >> set(app_options.mode, Mode::PRINT_HELP))
     % "Print this help"
-    | (command("-v", "--version") >> set(mode, Mode::PRINT_VERSION))
+    | (command("-v", "--version") >> set(app_options.mode, Mode::PRINT_VERSION))
     % "Prints version"
     );
 
-void parse_args(int argc, char** argv) {
+/* Functions */
+
+void
+merge_args(int argc, char** argv)
+{
   if (!parse(argc, argv, cli)) {
     std::printf("Invalid input!\n");
-    mode = Mode::PRINT_HELP;
+    app_options.mode = Mode::PRINT_HELP;
   }
 }
 
-void print_help(const char* app_name) {
+void
+merge_file(const std::string& path)
+{
+  using namespace std::filesystem;
+
+  if (!is_regular_file(path))
+    return;
+
+  config_file = toml::parse(path);
+
+  /* Global options */
+  app_options.active_timeout = toml::find_or(config_file, "active_timeout",
+      app_options.active_timeout);
+  app_options.idle_timeout = toml::find_or(config_file, "idle_timeout",
+      app_options.idle_timeout);
+  app_options.ip_address = toml::find_or(config_file, "ip_address",
+      app_options.ip_address);
+  app_options.port = toml::find_or(config_file, "port",
+      app_options.port);
+  app_options.plugins_dir = toml::find_or(config_file, "plugins_dir",
+      app_options.plugins_dir);
+}
+
+void
+print_help(const char* app_name)
+{
   std::cout << make_man_page(cli, app_name) << '\n';
 }
 
-const toml::value& get_toml() {
-  return toml_file;
+const toml::value&
+config()
+{
+  return config_file;
 }
 
-void load_file(const std::string& path) {
-  toml_file = toml::parse(path);
-
-  // Global values
-  auto global = toml::find(toml_file, "global");
-  active_timeout = toml::find_or(global, "active_timeout", active_timeout);
-  idle_timeout = toml::find_or(global, "idle_timeout", idle_timeout);
-  ip_address = toml::find_or(global, "ip_address", ip_address);
-  port = toml::find_or(global, "port", port);
+const Options&
+options()
+{
+  return app_options;
 }
 
-}
-
+} // namespace Options

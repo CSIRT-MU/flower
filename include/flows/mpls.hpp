@@ -8,19 +8,17 @@
 
 namespace Flow {
 
-class VLAN : public Flow {
+class MPLS : public Flow {
   struct {
     bool process;
-    bool id;
   } _def;
 
 public:
 
-  VLAN(const toml::value& config) {
-    if (config.contains("vlan")) {
-      const auto& vlan = toml::find(config, "vlan");
+  MPLS(const toml::value& config) {
+    if (config.contains("mpls")) {
+      // const auto& mpls = toml::find(config, "mpls");
       _def.process = true;
-      _def.id = toml::find_or(vlan, "id", false);
     } else {
       _def.process = false;
     }
@@ -31,16 +29,15 @@ public:
   }
 
   std::size_t type() const override {
-    return ttou(IPFIX::Type::DOT1Q);
+    return ttou(IPFIX::Type::MPLS);
   }
 
   std::size_t digest(const Tins::PDU& pdu) const override {
     auto digest = std::size_t{type()};
 
-    const auto& vlan = static_cast<const Tins::Dot1Q&>(pdu);
+    const auto& mpls = static_cast<const Tins::MPLS&>(pdu);
 
-    if (_def.id)
-      digest = combine(digest, vlan.id());
+    digest = combine(digest, mpls.label());
 
     return digest;
   }
@@ -48,21 +45,18 @@ public:
   Buffer fields() const override {
     auto fields = Buffer{};
 
-    if (_def.id) {
-      fields.push_back_any<std::uint16_t>(htons(IPFIX::FIELD_VLAN_ID));
-      fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_16));
-    }
+    fields.push_back_any<std::uint16_t>(
+        htons(IPFIX::FIELD_MPLS_LABEL_STACK_SECTION));
+    fields.push_back_any<std::uint16_t>(htons(IPFIX::TYPE_32));
 
     return fields;
   }
 
   Buffer values(const Tins::PDU& pdu) const override {
-    const auto& dot1q = static_cast<const Tins::Dot1Q&>(pdu);
+    const auto& mpls = static_cast<const Tins::MPLS&>(pdu);
     auto values = Buffer{};
 
-    if (_def.id) {
-      values.push_back_any<std::uint16_t>(htons(dot1q.id()));
-    }
+    values.push_back_any<std::uint32_t>(htonl(mpls.label()));
 
     return values;
   }
