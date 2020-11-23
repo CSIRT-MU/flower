@@ -233,7 +233,7 @@ Processor::start()
   /* Start packet reducing loop */
   try {
     while (running) {
-      if (!queue.wait_for(seconds(1))) {
+      if (queue.empty()) {
         check_idle_timeout(
             timestamp_to_timeval(Tins::Timestamp::current_time()), _cache.size());
         _time_point = high_resolution_clock::now();
