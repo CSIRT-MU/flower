@@ -190,4 +190,4 @@ class Connection {
   }
 };
 
-}; // namespace Net
+} // namespace Net
