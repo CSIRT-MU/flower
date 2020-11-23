@@ -205,7 +205,7 @@ capture_worker(Async::Queue<Tins::Packet>& queue)
     if (pdu == nullptr)
       continue;
 
-    queue.push(Tins::Packet{std::move(*pdu), timestamp});
+    queue.push(Tins::Packet{pdu.release(), timestamp, {}});
   }
 }
 
