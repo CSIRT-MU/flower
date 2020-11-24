@@ -59,7 +59,9 @@ sub_template_multi_list()
 
 /* Processor */
 Processor::Processor()
-  : _exporter(Options::options().ip_address, Options::options().port)
+  : _exporter(Options::options().ip_address, Options::options().port),
+  _active_timeout(Options::options().active_timeout),
+  _idle_timeout(Options::options().idle_timeout)
 {
   const auto& config = Options::config();
 
@@ -137,29 +139,27 @@ Processor::process(Tins::PDU* pdu, timeval timestamp)
   flow_values.set_any_at<std::uint8_t>(0, flow_values.size() - 1);
 
   auto it = _cache.insert_record(flow_digest, timestamp, flow_values);
-  check_active_timeout(timestamp, it->second);
+  check_active_timeout(timestamp.tv_sec, it->second);
 }
 
 void
-Processor::check_active_timeout(timeval now, CacheEntry& entry)
+Processor::check_active_timeout(std::uint32_t now, CacheEntry& entry)
 {
-  const auto active_timeout = Options::options().active_timeout;
-  const auto diff = now.tv_sec - entry.props.flow_start.tv_sec;
+  const auto diff = now - entry.props.flow_start.tv_sec;
 
-  if (diff < active_timeout)
+  if (diff < _active_timeout)
     return;
 
-  Log::debug("Active timeout with error %u\n", diff - active_timeout);
+  Log::debug("Active timeout with error %u\n", diff - _active_timeout);
 
   // TODO(dudoslav): Should we reset counter to 0 or 1?
   _exporter.insert_record(entry.props, IPFIX::REASON_ACTIVE, entry.values);
-  entry.props = {0, now, now};
+  entry.props = {0, {now, 0}, {now, 0}};
 }
 
 void
-Processor::check_idle_timeout(timeval now, std::size_t peek_size)
+Processor::check_idle_timeout(std::uint32_t now, std::size_t peek_size)
 {
-  const auto idle_timeout = Options::options().idle_timeout;
 
   if (_cache.empty())
     return;
@@ -169,16 +169,16 @@ Processor::check_idle_timeout(timeval now, std::size_t peek_size)
       _peek_iterator = _cache.begin();
 
     const auto& entry = _peek_iterator->second;
-    auto diff = now.tv_sec - entry.props.flow_end.tv_sec;
+    auto diff = now - entry.props.flow_end.tv_sec;
 
-    if (diff < idle_timeout) {
+    if (diff < _idle_timeout) {
       ++_peek_iterator;
       continue;
     }
 
     Log::debug("Idle timeout %u with error %u\n",
         _peek_iterator->first,
-        diff - idle_timeout);
+        diff - _idle_timeout);
 
     _exporter.insert_record(entry.props, IPFIX::REASON_IDLE, entry.values);
     _peek_iterator = _cache.erase(_peek_iterator);
@@ -233,26 +233,21 @@ Processor::start()
   /* Start packet reducing loop */
   try {
     while (running) {
-      if (queue.empty()) {
-        check_idle_timeout(
-            timestamp_to_timeval(Tins::Timestamp::current_time()), _cache.size());
-        _time_point = high_resolution_clock::now();
-        continue;
-      }
-
-      /* Get packet from parsed packets queue */
-      auto packet = queue.pop();
-
-      process(packet.pdu(), timestamp_to_timeval(packet.timestamp()));
-
       /* Calculate time delta */
       auto now = high_resolution_clock::now();
       auto delta = duration<double, std::milli>(now - _time_point).count();
       _time_point = now;
 
+      auto now_sec = duration_cast<seconds>(now.time_since_epoch()).count();
+      if (!queue.empty()) {
+        /* Get packet from parsed packets queue */
+        auto packet = queue.pop();
+	now_sec = packet.timestamp().seconds();
+        process(packet.pdu(), timestamp_to_timeval(packet.timestamp()));
+      }
+
       /* Perform idle check. Check the whole cache each second */
-      check_idle_timeout(
-          timestamp_to_timeval(packet.timestamp()),
+      check_idle_timeout(now_sec,
           (delta / 1000.f) * _cache.size());
     }
 
