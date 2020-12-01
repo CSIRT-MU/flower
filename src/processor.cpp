@@ -106,6 +106,7 @@ Processor::process(Tins::PDU* pdu, timeval timestamp)
   auto search = _cache.find(flow_digest);
   if (search != _cache.end()) {
     _cache.update_record(search, timestamp);
+    check_active_timeout(timestamp.tv_sec, search->second);
     return;
   }
 
@@ -138,8 +139,7 @@ Processor::process(Tins::PDU* pdu, timeval timestamp)
 
   flow_values.set_any_at<std::uint8_t>(0, flow_values.size() - 1);
 
-  auto it = _cache.insert_record(flow_digest, timestamp, flow_values);
-  check_active_timeout(timestamp.tv_sec, it->second);
+  _cache.insert_record(flow_digest, timestamp, std::move(flow_values));
 }
 
 void
@@ -232,7 +232,7 @@ Processor::start()
 
   /* Start packet reducing loop */
   try {
-    while (running) {
+    while (running || !queue.empty()) {
       /* Calculate time delta */
       auto now = high_resolution_clock::now();
       auto delta = duration<double, std::milli>(now - _time_point).count();
