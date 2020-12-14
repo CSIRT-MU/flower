@@ -48,8 +48,8 @@ if (DOXYGEN_FOUND)
 endif (DOXYGEN_FOUND)
 
 install(TARGETS flower EXPORT flowerTargets DESTINATION bin)
-install(FILES include/plugin.h DESTINATION include)
-install(FILES include/input.h DESTINATION include)
+install(FILES include/plugin.h DESTINATION include/flower)
+install(FILES include/input.h DESTINATION include/flower)
 
 install(EXPORT flowerTargets
   FILE flowerTargets.cmake
